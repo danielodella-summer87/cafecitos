@@ -1,185 +1,156 @@
 "use server";
 
-import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { COOKIE_NAME, signSessionToken } from "@/lib/auth/session";
-
-function normalizeCedula(v: string) {
-  return (v ?? "").toString().replace(/\D/g, "");
-}
+import { setSessionCookie, signSessionToken, clearSessionCookie } from "@/lib/auth/session";
 
 const loginSchema = z.object({
-  cedula: z.string().min(1),
-  pin: z.string().min(1),
+  cedula: z.string().min(6),
+  pin: z.string().min(4),
 });
 
-export type LoginResult =
-  | { ok: true; role: "owner" | "consumer"; redirectTo: string }
-  | { ok: false; error: string };
-
-export async function loginUser(formData: FormData): Promise<LoginResult> {
-  const rawCedula = String(formData.get("cedula") ?? "");
-  const pin = String(formData.get("pin") ?? "");
-  const mode = String(formData.get("mode") || "");
-
-  const cedula = normalizeCedula(rawCedula);
-
-  const parsed = loginSchema.safeParse({ cedula, pin });
-  if (!parsed.success) {
-    return { ok: false, error: "Ingresá tu cédula y tu PIN" };
-  }
-
-  const supabase = supabaseAdmin();
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, role, pin_hash, cafe_id, full_name")
-    .eq("cedula", cedula)
-    .single();
-
-  if (error || !data) {
-    return { ok: false, error: "Usuario no encontrado" };
-  }
-
-  const valid = await bcrypt.compare(pin, data.pin_hash);
-  if (!valid) return { ok: false, error: "PIN incorrecto" };
-
-  const role = data.role as "owner" | "consumer";
-
-  // /login (sin mode) = solo consumer
-  if (mode !== "owner") {
-    if (role === "owner") {
-      return { ok: false, error: "Este acceso es para consumidores. Usá Modo Owner." };
-    }
-  }
-
-  // /login?mode=owner = solo owner
-  if (mode === "owner") {
-    if (role !== "owner") {
-      return { ok: false, error: "Este acceso es para dueños de cafetería." };
-    }
-  }
-
-  const token = signSessionToken({
-    profileId: data.id,
-    role: data.role as "owner" | "consumer",
-    cafeId: (data as { cafe_id?: string }).cafe_id ?? null,
-    fullName: (data as { full_name?: string }).full_name ?? null,
-  });
-
-  const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 días
-  });
-
-  if (role === "owner") {
-    return { ok: true, role: "owner", redirectTo: "/app/owner" };
-  }
-  return { ok: true, role: "consumer", redirectTo: "/app/consumer" };
-}
-
-export async function logoutUser() {
-  const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, "", { path: "/", maxAge: 0 });
-  redirect("/login");
-}
-
-// ================================
-// CONSUMER REGISTRATION (registerUser)
-// ================================
-const registerConsumerSchema = z.object({
-  cedula: z.string().min(1),
-  pin: z.string().min(1),
+const RegisterSchema = z.object({
+  cedula: z.string().min(6),
+  pin: z.string().min(3),
   phone: z.string().optional(),
   full_name: z.string().optional(),
 });
 
-export async function registerUser(
-  input: FormData | { cedula: string; pin: string; phone?: string; full_name?: string }
-) {
-  const data = input instanceof FormData
-    ? {
-        cedula: String(input.get("cedula") ?? "").trim(),
-        pin: String(input.get("pin") ?? ""),
-        phone: String(input.get("phone") ?? "").trim(),
-        full_name: String(input.get("full_name") ?? "").trim(),
-      }
-    : input;
-  const parsed = registerConsumerSchema.parse({
-    cedula: data.cedula,
-    pin: data.pin,
-    phone: data.phone || undefined,
-    full_name: data.full_name || undefined,
-  });
-  const supabase = supabaseAdmin();
-  const normalizedCedula = normalizeCedula(parsed.cedula);
-  const pin_hash = await bcrypt.hash(parsed.pin, 10);
+const CreateOwnerSchema = z.object({
+  cedula: z.string().min(6),
+  pin: z.string().min(3),
+  full_name: z.string().min(2),
+  cafe_name: z.string().min(2),
+  phone: z.string().optional(),
+});
 
-  const { error: profileErr } = await supabase
-    .from("profiles")
-    .insert({
-      full_name: parsed.full_name || null,
-      cedula: normalizedCedula,
-      role: "consumer",
-      pin_hash,
-      phone: parsed.phone || null,
-    });
-
-  if (profileErr) {
-    console.error("Profile create error (consumer):", profileErr);
-    throw new Error("No se pudo crear el usuario");
-  }
+function onlyDigits(v: string) {
+  return (v ?? "").replace(/\D/g, "");
 }
 
-// ================================
-// OWNER REGISTRATION PRO
-// ================================
-export async function createOwner(input: FormData | { cafe_name: string; full_name: string; cedula: string; pin: string }) {
-  const data = input instanceof FormData
-    ? {
-        cafe_name: String(input.get("cafe_name") ?? ""),
-        full_name: String(input.get("full_name") ?? ""),
-        cedula: String(input.get("cedula") ?? ""),
-        pin: String(input.get("pin") ?? ""),
-      }
-    : input;
-  const supabase = supabaseAdmin();
-  const normalizedCedula = normalizeCedula(data.cedula);
-  const pin_hash = await bcrypt.hash(data.pin, 10);
+export async function loginUser(input: FormData | { cedula: string; pin: string }) {
+  const raw =
+    input instanceof FormData
+      ? {
+          cedula: String(input.get("cedula") ?? "").trim(),
+          pin: String(input.get("pin") ?? "").trim(),
+        }
+      : {
+          cedula: String(input.cedula ?? "").trim(),
+          pin: String(input.pin ?? "").trim(),
+        };
 
-  // 1) Crear cafetería del owner
-  const { data: cafe, error: cafeErr } = await supabase
-    .from("cafes")
-    .insert({
-      name: data.cafe_name,
-    })
-    .select()
+  const parsed = loginSchema.safeParse({ cedula: onlyDigits(raw.cedula), pin: raw.pin });
+  if (!parsed.success) return { ok: false, error: "Ingresá cédula y PIN válidos" };
+
+  const supabase = supabaseAdmin();
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("id, role, cedula, full_name, cafe_id, pin_hash, phone, created_at")
+    .eq("cedula", parsed.data.cedula)
     .single();
 
-  if (cafeErr || !cafe) {
-    console.error("Cafe create error:", cafeErr);
-    throw new Error("No se pudo crear la cafetería");
-  }
+  if (error || !profile) return { ok: false, error: "Usuario no registrado" };
 
-  // 2) Crear profile owner con cafe_id
-  const { error: profileErr } = await supabase
-    .from("profiles")
-    .insert({
-      full_name: data.full_name,
-      cedula: normalizedCedula,
-      role: "owner",
-      pin_hash,
-      cafe_id: cafe.id,
-    });
+  const valid = await bcrypt.compare(parsed.data.pin, profile.pin_hash);
+  if (!valid) return { ok: false, error: "PIN incorrecto" };
+
+  const token = signSessionToken({
+    profileId: profile.id,
+    role: profile.role,
+    cafeId: profile.cafe_id ?? null,
+    fullName: profile.full_name ?? null,
+  });
+
+  await setSessionCookie(token);
+
+  let redirectTo = "/app/consumer";
+  if (profile.role === "owner") redirectTo = "/app/owner";
+  if (profile.role === "admin") redirectTo = "/app/admin";
+
+  return { ok: true, redirectTo };
+}
+
+export async function registerUser(input: FormData | { cedula: string; pin: string; phone?: string; full_name?: string }) {
+  const cedula = input instanceof FormData ? String(input.get("cedula") ?? "") : input.cedula;
+  const pin = input instanceof FormData ? String(input.get("pin") ?? "") : input.pin;
+  const phone = input instanceof FormData ? String(input.get("phone") ?? "").trim() : (input.phone ?? "");
+  const full_name = input instanceof FormData ? String(input.get("full_name") ?? "").trim() : (input.full_name ?? "");
+
+  const parsed = RegisterSchema.safeParse({
+    cedula: onlyDigits(cedula),
+    pin,
+    phone: phone || undefined,
+    full_name: full_name || undefined,
+  });
+  if (!parsed.success) return { ok: false, error: "Datos inválidos" };
+
+  const pin_hash = await bcrypt.hash(parsed.data.pin, 10);
+
+  // Insert con SERVICE ROLE (evita problemas de RLS)
+  const { error: profileErr } = await supabaseAdmin().from("profiles").insert({
+    role: "consumer",
+    cedula: parsed.data.cedula,
+    pin_hash,
+    phone: parsed.data.phone ?? null,
+    full_name: parsed.data.full_name ?? null,
+  });
 
   if (profileErr) {
-    console.error("Profile create error:", profileErr);
-    throw new Error("No se pudo crear el owner");
+    // Mostramos el error real para diagnosticar (unique, RLS, etc.)
+    return { ok: false, error: profileErr.message };
   }
+
+  return { ok: true };
+}
+
+export async function createOwner(input: FormData | { cedula: string; pin: string; full_name: string; cafe_name: string; phone?: string }) {
+  const cedula = input instanceof FormData ? String(input.get("cedula") ?? "") : input.cedula;
+  const pin = input instanceof FormData ? String(input.get("pin") ?? "") : input.pin;
+  const full_name = input instanceof FormData ? String(input.get("full_name") ?? "").trim() : input.full_name;
+  const cafe_name = input instanceof FormData ? String(input.get("cafe_name") ?? "").trim() : input.cafe_name;
+  const phone = input instanceof FormData ? String(input.get("phone") ?? "").trim() : (input.phone ?? "");
+
+  const parsed = CreateOwnerSchema.safeParse({
+    cedula: onlyDigits(cedula),
+    pin,
+    full_name,
+    cafe_name,
+    phone: phone || undefined,
+  });
+  if (!parsed.success) return { ok: false, error: "Datos inválidos" };
+
+  const pin_hash = await bcrypt.hash(parsed.data.pin, 10);
+
+  const db = supabaseAdmin();
+  const cafeInsert = await db.from("cafes").insert({ name: parsed.data.cafe_name }).select("id").single();
+  if (cafeInsert.error) return { ok: false, error: cafeInsert.error.message };
+
+  const profileInsert = await db.from("profiles").insert({
+    role: "owner",
+    cedula: parsed.data.cedula,
+    pin_hash,
+    full_name: parsed.data.full_name,
+    phone: parsed.data.phone ?? null,
+    cafe_id: cafeInsert.data.id,
+  }).select("id, role, cafe_id").single();
+
+  if (profileInsert.error) return { ok: false, error: profileInsert.error.message };
+
+  // logueamos automáticamente al owner
+  const token = signSessionToken({
+    profileId: profileInsert.data.id,
+    role: profileInsert.data.role,
+    cafeId: profileInsert.data.cafe_id ?? null,
+  });
+  await setSessionCookie(token);
+
+  return { ok: true };
+}
+
+export async function logout() {
+  await clearSessionCookie();
+  return { ok: true };
 }

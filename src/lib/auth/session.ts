@@ -2,7 +2,7 @@ import { cookies } from "next/headers"
 export const COOKIE_NAME = "cafecitos_session"
 export type SessionUser = {
   profileId: string
-  role: "owner" | "consumer"
+  role: "owner" | "consumer" | "admin"
   cafeId?: string | null
   fullName?: string | null
   phone?: string | null
@@ -33,6 +33,16 @@ function base64UrlDecode(input: string) {
  * Lee cafecitos_session (JWT) y devuelve el payload como objeto.
  * (Sin verificar firma; para UI/guards alcanza en local.)
  */
+export async function setSessionCookie(token: string) {
+  const store = await cookies()
+  store.set(COOKIE_NAME, token, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 7 })
+}
+
+export async function clearSessionCookie() {
+  const store = await cookies()
+  store.set(COOKIE_NAME, "", { path: "/", maxAge: 0 })
+}
+
 export async function getSession(): Promise<SessionUser | null> {
   const store = await cookies()
   const token = store.get(COOKIE_NAME)?.value
