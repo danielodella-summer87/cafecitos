@@ -10,9 +10,14 @@ const LoginHeader = () => {
       <img
         src="/logoamorperfecto.png"
         alt="Amor Perfecto"
-        className="h-10 w-auto mb-3"
+        className="
+          w-40
+          md:w-48
+          h-auto
+          mb-4
+          opacity-95
+        "
         loading="eager"
-        onError={() => console.error("No carga /logoamorperfecto.png (revisar nombre exacto + deploy)")}
       />
 
       <h1 className="text-2xl font-semibold text-white">Cafecitos</h1>
