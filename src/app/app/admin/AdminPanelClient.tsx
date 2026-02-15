@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import { createOwnerAndCafe } from "@/app/actions/admin";
+import { PRO } from "@/lib/ui/pro";
 
 export default function AdminPanelClient() {
   const [isPending, startTransition] = useTransition();
@@ -38,10 +40,22 @@ export default function AdminPanelClient() {
   }
 
   return (
-    <div className="min-h-screen flex items-start justify-center p-6">
-      <div className="w-full max-w-xl border rounded-2xl p-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-semibold">Panel Admin</h1>
+    <div className={PRO.page}>
+      <div className="mx-auto max-w-5xl px-4 py-8 flex justify-center">
+        <div className="w-full max-w-xl ap-card p-8">
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Image
+              src="/logoamorperfecto.png"
+              alt="Amor Perfecto"
+              width={160}
+              height={60}
+              priority
+              className="h-auto w-40"
+            />
+            <div className="h-6 w-px bg-black/10" />
+            <h1 className="text-xl font-semibold">Panel Admin</h1>
+          </div>
           <a className="text-sm underline" href="/login">
             Volver al login
           </a>
@@ -110,6 +124,7 @@ export default function AdminPanelClient() {
 
           {status ? <p className="text-sm mt-2">{status}</p> : null}
         </form>
+        </div>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { loginUser } from "@/app/actions/auth";
+import { PRO } from "@/lib/ui/pro";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,70 +37,74 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+    <div className={`${PRO.center} min-h-screen py-8`}>
+      <div className={PRO.container}>
+        <div className={`${PRO.card} pb-8`}>
+          {/* LOGO (ancho similar al título) */}
+          <div className="mx-auto mb-4 w-[260px] md:w-[320px]">
+            <img
+              src="/logoamorperfecto.png"
+              alt="Amor Perfecto"
+              className="w-full h-auto object-contain"
+            />
+          </div>
 
-        {/* LOGO */}
-        <div className="mx-auto mb-4 w-[220px] md:w-[260px] h-[56px] md:h-[64px] overflow-hidden flex items-center justify-center">
-          <img
-            src="/logoamorperfecto.png"
-            alt="Amor Perfecto"
-            className="w-full h-auto object-contain scale-[2.2] origin-center"
-          />
+          <h1 className={PRO.h1}>Cafecitos</h1>
+          <div className={PRO.divider} />
+          <p className={PRO.subtitle}>Accede con tu cédula y pin de 4 dígitos.</p>
+
+          <form onSubmit={onSubmit} className="mt-6 space-y-4" autoComplete="off">
+            <div>
+              <label className={PRO.label}>Cédula</label>
+              <input
+                name="cedula"
+                value={cedula}
+                onChange={(e) => setCedula(e.target.value)}
+                placeholder="Ej: 40031685"
+                autoComplete="off"
+                className={PRO.input}
+                inputMode="numeric"
+                required
+              />
+            </div>
+
+            <div>
+              <label className={PRO.label}>PIN (4 dígitos)</label>
+              <input
+                name="pin"
+                type="password"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                placeholder="••••"
+                autoComplete="new-password"
+                className={PRO.input}
+                inputMode="numeric"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-3 w-full rounded-xl bg-black px-4 py-3 text-base font-semibold text-white hover:bg-black/90 active:bg-black/80 disabled:opacity-50"
+            >
+              {loading ? "Entrando..." : "Entrar"}
+            </button>
+
+            {status ? <p className="text-sm text-red-600">{status}</p> : null}
+
+            <div className="text-center text-sm text-neutral-600 mt-4">
+              ¿No tenés cuenta?{" "}
+              <a href="/register" className="font-medium text-neutral-900 underline">
+                Registrarme
+              </a>
+            </div>
+
+            <p className="text-center text-xs text-neutral-500 mt-2">
+              © {new Date().getFullYear()} Amor Perfecto
+            </p>
+          </form>
         </div>
-
-        {/* TITULO */}
-        <h1 className="text-center text-2xl font-semibold text-neutral-900">
-          Cafecitos
-        </h1>
-
-        <div className="mx-auto mt-3 mb-4 h-px w-16 bg-neutral-300" />
-
-        <p className="text-center text-sm text-neutral-500 mb-6">
-          Accede con tu cédula y pin de 4 dígitos.
-        </p>
-
-        {/* FORM */}
-        <form onSubmit={onSubmit} className="space-y-4" autoComplete="off">
-          <div>
-            <label className="text-sm text-neutral-700">Cédula</label>
-            <input
-              name="cedula"
-              value={cedula}
-              onChange={(e) => setCedula(e.target.value)}
-              placeholder="Ej: 40031685"
-              className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900"
-              inputMode="numeric"
-              autoComplete="off"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-neutral-700">PIN (4 dígitos)</label>
-            <input
-              name="pin"
-              type="password"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              placeholder="••••"
-              className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900"
-              inputMode="numeric"
-              autoComplete="new-password"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-neutral-900 text-white py-2 font-medium hover:bg-neutral-800 transition disabled:opacity-50"
-          >
-            {loading ? "Entrando..." : "Entrar"}
-          </button>
-
-          {status ? <p className="text-sm text-red-600">{status}</p> : null}
-        </form>
       </div>
     </div>
   );

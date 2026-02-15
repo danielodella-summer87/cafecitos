@@ -1,26 +1,115 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Base */
+  --ap-bg: 255 255 255;
+  --ap-ink: 15 15 15;
+  --ap-muted: 95 95 95;
+
+  /* Brand (café / terracota premium) */
+  --ap-accent: 198 98 58;       /* café/terracota */
+  --ap-accent-2: 140 72 38;     /* oscuro */
+  --ap-border: 228 228 231;     /* neutral-200 */
+  --ap-card: 255 255 255;       /* white */
+  --ap-shadow: 0 0 0;           /* rgb placeholder */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html, body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: rgb(var(--ap-ink));
+  background: rgb(var(--ap-bg));
+}
+
+/* Fondo PRO: radial suave + "grano" liviano (CSS only) */
+.ap-pro-bg {
+  position: relative;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(var(--ap-accent), 0.10), transparent 60%),
+    radial-gradient(900px 500px at 10% 20%, rgba(0, 0, 0, 0.03), transparent 55%),
+    radial-gradient(900px 500px at 90% 30%, rgba(0, 0, 0, 0.03), transparent 55%),
+    rgb(var(--ap-bg));
+}
+
+.ap-pro-bg::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.07;
+  background-image:
+    linear-gradient(transparent 0%, transparent 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+  background-size: 260px 260px;
+}
+
+/* Helpers PRO (usables en cualquier screen) */
+.ap-card {
+  border-radius: 1rem;
+  border-width: 1px;
+  background-color: white;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  border-color: rgb(var(--ap-border));
+}
+
+.ap-title {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.ap-muted {
+  color: rgb(var(--ap-muted));
+}
+
+.ap-divider {
+  height: 1px;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.ap-input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border-width: 1px;
+  background-color: white;
+  padding: 0.5rem 0.75rem;
+  outline: none;
+  transition: border-color, box-shadow;
+  border-color: rgb(var(--ap-border));
+}
+
+.ap-input:focus {
+  border-color: rgba(var(--ap-accent), 0.7);
+  box-shadow: 0 0 0 4px rgba(var(--ap-accent), 0.15);
+}
+
+.ap-btn {
+  width: 100%;
+  border-radius: 0.75rem;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  transition: filter;
+}
+
+.ap-btn-primary {
+  color: white;
+  background: linear-gradient(180deg, rgba(var(--ap-accent), 1), rgba(var(--ap-accent-2), 1));
+}
+
+.ap-btn-primary:hover {
+  filter: brightness(1.03);
+}
+
+.ap-badge-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  background: rgba(34, 197, 94, 0.1);
+  color: rgb(22 101 52);
+  border: 1px solid rgba(34, 197, 94, 0.25);
 }

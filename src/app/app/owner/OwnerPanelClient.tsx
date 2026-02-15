@@ -6,6 +6,7 @@ import { ownerAddCafecitos } from "@/app/actions/owner";
 import { ownerRedeemCafecitos } from "@/app/actions/ownerRedeem";
 import { ownerGetConsumerSummary } from "@/app/actions/ownerSummary";
 import { getTxMeta } from "@/lib/ui/txLabels";
+import { PRO } from "@/lib/ui/pro";
 
 type Props = {
   me: { full_name: string | null; cedula: string };
@@ -181,7 +182,8 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6 space-y-6">
+    <div className={PRO.page}>
+      <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-3xl font-semibold">Panel de la cafetería</h1>
         <form action={logout}>
@@ -497,5 +499,6 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
         {consumer && status && <div className="text-sm">{status}</div>}
       </div>
     </div>
+  </div>
   );
 }
