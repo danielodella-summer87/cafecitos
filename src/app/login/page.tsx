@@ -4,6 +4,26 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { loginUser } from "@/app/actions/auth";
 
+const LoginHeader = () => {
+  return (
+    <div className="flex flex-col items-center text-center">
+      <img
+        src="/logoamorperfecto.png"
+        alt="Amor Perfecto"
+        className="h-10 w-auto mb-3"
+        loading="eager"
+        onError={() => console.error("No carga /logoamorperfecto.png (revisar nombre exacto + deploy)")}
+      />
+
+      <h1 className="text-2xl font-semibold text-white">Cafecitos</h1>
+      <div className="w-32 h-px bg-white/15 my-3" />
+      <p className="text-sm text-white/70">
+        Accede con tu cédula y pin de 4 dígitos.
+      </p>
+    </div>
+  );
+};
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -41,26 +61,8 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md border border-white/10 rounded-2xl bg-neutral-900 p-8">
-        <div className="mb-6 flex flex-col items-center justify-center text-center">
-          {/* Logo Amor Perfecto */}
-          <img
-            src="/logoamarperfecto.png"
-            alt="Amor Perfecto"
-            className="mb-4 h-14 w-auto object-contain"
-          />
-
-          {/* Título centrado */}
-          <h1 className="text-3xl font-semibold text-white">
-            Cafecitos
-          </h1>
-
-          {/* Línea separadora */}
-          <div className="mt-4 w-32 border-t border-white/20" />
-
-          {/* Texto descriptivo */}
-          <p className="mt-4 text-sm text-white/70">
-            Accede con tu cédula y pin de 4 digitos.
-          </p>
+        <div className="mb-6">
+          <LoginHeader />
         </div>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4" autoComplete="off">
