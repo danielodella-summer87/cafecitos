@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getSessionProfile } from "@/lib/auth/session";
+import { getSession } from "@/lib/auth/session";
 
 const schema = z.object({
   cedula: z.string().min(6),
@@ -11,9 +11,10 @@ const schema = z.object({
 export async function ownerLookupConsumer(input: unknown) {
   const { cedula } = schema.parse(input);
 
-  const me = await getSessionProfile();
-  if (!me) throw new Error("No autenticado");
-  if (me.role !== "owner") throw new Error("Solo un owner puede buscar consumidores");
+  const session = await getSession();
+  const profileId = session?.profileId;
+  if (!session) throw new Error("No autenticado");
+  if (session.role !== "owner") throw new Error("Solo un owner puede buscar consumidores");
 
   const supabase = supabaseAdmin();
 
