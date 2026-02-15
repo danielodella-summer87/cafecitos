@@ -5,7 +5,7 @@ export default function AdminPage() {
     <div style={{ maxWidth: 420, margin: "40px auto" }}>
       <h1>Panel Admin</h1>
 
-      <form action={createOwner}>
+      <form action={createOwner as unknown as (formData: FormData) => void}>
         <input name="full_name" placeholder="Nombre owner" required />
         <input name="cedula" placeholder="Cédula" required />
         <input name="pin" placeholder="PIN" required />
