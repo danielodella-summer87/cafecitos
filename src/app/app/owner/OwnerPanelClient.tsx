@@ -272,25 +272,41 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
         {lookup?.profile && !redeemSuccess && (
           <div className="border rounded-lg p-3 text-sm space-y-2">
             {/* Card rápida: nombre + cédula + saldo global + disponible en mi cafetería + canjeado en mi cafetería */}
-            <div className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-4">
-              <div className="font-semibold">{lookup.profile.full_name ?? "(sin nombre)"}</div>
-              <div className="text-xs text-neutral-500 mb-1">Cédula: {lookup.profile.cedula} · Rol: {lookup.profile.role}</div>
-              {"phone" in lookup.profile && (
-                <div className="text-xs text-neutral-500 mb-1">Teléfono: {(lookup.profile as { phone?: string | null }).phone ?? "—"}</div>
+            <div className="rounded-2xl border border-white/10 bg-neutral-900/80 backdrop-blur p-4 text-white shadow-sm">
+              <div className="text-base font-semibold">
+                {lookup.profile.full_name ?? "(sin nombre)"}
+              </div>
+
+              <div className="text-sm text-white/70 mt-1">
+                Cédula: {lookup.profile.cedula} · Rol: {lookup.profile.role}
+              </div>
+
+              {"phone" in lookup.profile && (lookup.profile as { phone?: string | null }).phone && (
+                <div className="text-sm text-white/70">
+                  Teléfono: {(lookup.profile as { phone?: string | null }).phone}
+                </div>
               )}
-              <div className="text-xs text-neutral-500 mb-3">Socio desde: {formatDate((lookup.profile as { created_at?: string | null }).created_at)}</div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+
+              <div className="grid grid-cols-2 gap-4 mt-4">
                 <div>
-                  <div className="text-xs text-neutral-500">Saldo actual</div>
-                  <div className="text-lg font-semibold">{lookup?.balance ?? 0}</div>
+                  <div className="text-xs text-white/60">Saldo actual</div>
+                  <div className="text-2xl font-semibold text-white">
+                    {lookup?.balance ?? 0}
+                  </div>
                 </div>
+
                 <div>
-                  <div className="text-xs text-neutral-500">Generados en mi cafetería</div>
-                  <div className="text-lg font-semibold">{lookup?.availableInThisCafe ?? 0}</div>
+                  <div className="text-xs text-white/60">Generados en mi cafetería</div>
+                  <div className="text-2xl font-semibold text-white">
+                    {lookup?.availableInThisCafe ?? 0}
+                  </div>
                 </div>
+
                 <div>
-                  <div className="text-xs text-neutral-500">Canjeado en mi cafetería</div>
-                  <div className="text-lg font-semibold">{lookup?.redeemedInThisCafe ?? 0}</div>
+                  <div className="text-xs text-white/60">Canjeado en mi cafetería</div>
+                  <div className="text-2xl font-semibold text-white">
+                    {lookup?.redeemedInThisCafe ?? 0}
+                  </div>
                 </div>
               </div>
             </div>
