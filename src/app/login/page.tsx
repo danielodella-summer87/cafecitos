@@ -40,19 +40,38 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md border rounded-2xl p-8">
-        <h1 className="text-3xl font-semibold">Cafecitos</h1>
-        <p className="text-sm text-gray-600 mt-1">Accedé con tu cédula y PIN de 4 dígitos.</p>
+      <div className="w-full max-w-md border border-white/10 rounded-2xl bg-neutral-900 p-8">
+        <div className="mb-6 flex flex-col items-center justify-center text-center">
+          {/* Logo Amor Perfecto */}
+          <img
+            src="/logoamarperfecto.png"
+            alt="Amor Perfecto"
+            className="mb-4 h-14 w-auto object-contain"
+          />
+
+          {/* Título centrado */}
+          <h1 className="text-3xl font-semibold text-white">
+            Cafecitos
+          </h1>
+
+          {/* Línea separadora */}
+          <div className="mt-4 w-32 border-t border-white/20" />
+
+          {/* Texto descriptivo */}
+          <p className="mt-4 text-sm text-white/70">
+            Accede con tu cédula y pin de 4 digitos.
+          </p>
+        </div>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4" autoComplete="off">
           <div>
-            <label className="text-sm font-medium">Cédula</label>
+            <label className="text-sm font-medium text-white/90">Cédula</label>
             <input
               name="cedula"
               value={cedula}
               onChange={(e) => setCedula(e.target.value)}
               placeholder="Ej: 40031685"
-              className="mt-1 w-full border rounded px-3 py-2"
+              className="mt-1 w-full border border-white/20 rounded px-3 py-2 bg-white/10 text-white placeholder-white/50"
               inputMode="numeric"
               autoComplete="off"
               required
@@ -60,14 +79,14 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="text-sm font-medium">PIN (4 dígitos)</label>
+            <label className="text-sm font-medium text-white/90">PIN (4 dígitos)</label>
             <input
               name="pin"
               type="password"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               placeholder="••••"
-              className="mt-1 w-full border rounded px-3 py-2"
+              className="mt-1 w-full border border-white/20 rounded px-3 py-2 bg-white/10 text-white placeholder-white/50"
               inputMode="numeric"
               autoComplete="new-password"
               required
@@ -77,12 +96,12 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded bg-black text-white py-2 disabled:opacity-50"
+            className="w-full rounded bg-white text-neutral-900 py-2 font-medium disabled:opacity-50"
           >
             {loading ? "Entrando..." : "Entrar"}
           </button>
 
-          {status ? <p className="text-sm text-red-600">{status}</p> : null}
+          {status ? <p className="text-sm text-red-400">{status}</p> : null}
         </form>
       </div>
     </div>
