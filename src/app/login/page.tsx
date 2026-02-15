@@ -7,18 +7,15 @@ import { loginUser } from "@/app/actions/auth";
 const LoginHeader = () => {
   return (
     <div className="flex flex-col items-center text-center">
-      <img
-        src="/logoamorperfecto.png"
-        alt="Amor Perfecto"
-        className="
-          w-40
-          md:w-48
-          h-auto
-          mb-4
-          opacity-95
-        "
-        loading="eager"
-      />
+      {/* LOGO (zoom + crop del padding) */}
+      <div className="mx-auto mb-4 w-[220px] md:w-[260px] h-[56px] md:h-[64px] overflow-hidden flex items-center justify-center">
+        <img
+          src="/logoamorperfecto.png"
+          alt="Amor Perfecto"
+          className="w-full h-auto object-contain scale-[2.2] md:scale-[2.0] origin-center opacity-95"
+          loading="eager"
+        />
+      </div>
 
       <h1 className="text-2xl font-semibold text-white">Cafecitos</h1>
       <div className="w-32 h-px bg-white/15 my-3" />
