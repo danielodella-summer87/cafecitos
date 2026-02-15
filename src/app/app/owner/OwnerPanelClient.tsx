@@ -312,7 +312,7 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
                     <div className="space-y-2 mt-2">
                       {(lookup?.last ?? []).map((t: any) => {
                         const meta = getTxMeta(t.tx_type);
-                        const isMinus = meta.tone === "minus";
+                        const isMinus = t.tx_type === "redeem" || t.tx_type === "transfer_out";
 
                         return (
                           <div

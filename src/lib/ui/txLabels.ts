@@ -1,28 +1,58 @@
-export type TxType = "earn" | "redeem" | "transfer_out" | "transfer_in" | "adjust";
+export type TxType =
+  | "earn"
+  | "redeem"
+  | "transfer_in"
+  | "transfer_out"
+  | "adjust"
+  | string;
 
 export type TxMeta = {
   label: string;
   icon: string;
-  tone: "plus" | "minus" | "neutral";
+  color: string; // tailwind class (ej: "text-green-600")
 };
+
+export function getTxLabel(type: TxType): string {
+  return getTxMeta(type).label;
+}
 
 export function getTxMeta(type: TxType): TxMeta {
   switch (type) {
     case "earn":
-      return { label: "Sumar cafecitos", icon: "☕", tone: "plus" };
+      return {
+        label: "Sumar cafecitos",
+        icon: "☕️",
+        color: "text-green-700",
+      };
     case "redeem":
-      return { label: "Canjear cafecitos", icon: "☕", tone: "minus" };
+      return {
+        label: "Canjear cafecitos",
+        icon: "✅",
+        color: "text-orange-700",
+      };
     case "transfer_in":
-      return { label: "Transferencia recibida", icon: "↘️", tone: "plus" };
+      return {
+        label: "Transferencia recibida",
+        icon: "⬇️",
+        color: "text-green-700",
+      };
     case "transfer_out":
-      return { label: "Transferencia enviada", icon: "↗️", tone: "minus" };
+      return {
+        label: "Transferencia enviada",
+        icon: "⬆️",
+        color: "text-red-700",
+      };
     case "adjust":
-      return { label: "Ajuste", icon: "🛠️", tone: "neutral" };
+      return {
+        label: "Ajuste",
+        icon: "🛠️",
+        color: "text-neutral-700",
+      };
     default:
-      return { label: "Movimiento", icon: "•", tone: "neutral" };
+      return {
+        label: "Movimiento",
+        icon: "•",
+        color: "text-neutral-700",
+      };
   }
-}
-
-export function getTxLabel(type: TxType): string {
-  return getTxMeta(type).label;
 }
