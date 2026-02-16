@@ -13,3 +13,8 @@ export function canAccess(userTierSlug: string, minTierSlug: string): boolean {
   if (minIdx === -1) return true;
   return userIdx >= minIdx;
 }
+
+/** True si el usuario puede acceder al módulo Universo Café (nivel Pro o superior). */
+export function canAccessUniversoCafe(tierSlug: string): boolean {
+  return canAccess(tierSlug, "pro");
+}

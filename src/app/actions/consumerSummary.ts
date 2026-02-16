@@ -2,6 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
+import { getCurrentUserTierSlug } from "@/app/actions/coffeeGuides";
 
 export type ConsumerTx = {
   id: string;
@@ -36,6 +37,7 @@ function computeBalance(profileId: string, txs: ConsumerTx[]) {
 
 export type ConsumerSummaryResult = {
   session: { profileId: string; fullName: string | null; role: string };
+  tierSlug: string;
   balance: number;
   last10: ConsumerTx[];
   generatedTotal: number;
@@ -61,6 +63,7 @@ export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null
 
   const typed = (txs ?? []) as ConsumerTx[];
   const balance = computeBalance(profileId, typed);
+  const tierSlug = await getCurrentUserTierSlug(profileId);
 
   const generatedTotal = typed
     .filter(
@@ -100,6 +103,7 @@ export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null
       fullName: session.fullName ?? null,
       role: session.role,
     },
+    tierSlug,
     balance,
     last10,
     generatedTotal,

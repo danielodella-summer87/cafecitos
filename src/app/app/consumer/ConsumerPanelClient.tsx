@@ -3,10 +3,13 @@
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import { logout } from "@/app/actions/logout";
 import type { ConsumerSummaryResult, ConsumerTx } from "@/app/actions/consumerSummary";
 import { getTxMeta } from "@/lib/ui/txLabels";
 import { getMembershipTier, getNextTierInfo } from "@/lib/ui/membership";
+import { canAccessUniversoCafe } from "@/lib/tierAccess";
+import UnlockModal from "@/app/app/universo-cafe/UnlockModal";
 import { PRO } from "@/lib/ui/pro";
 
 const BENEFIT_TARGET = 100;
@@ -23,10 +26,13 @@ function cafeName(cafeId: string | null, cafesMap: Record<string, string>): stri
 export default function ConsumerPanelClient({ data }: Props) {
   const params = useSearchParams();
   const debug = params.get("debug") === "1";
+  const [showUniversoLock, setShowUniversoLock] = useState(false);
 
-  const { session, balance, last10, generatedTotal, redeemedTotal, cafesMap } = data;
+  const { session, tierSlug, balance, last10, generatedTotal, redeemedTotal, cafesMap } = data;
   const missing = Math.max(0, BENEFIT_TARGET - balance);
   const progressPct = Math.min(100, (balance / BENEFIT_TARGET) * 100);
+
+  const hasUniversoAccess = useMemo(() => canAccessUniversoCafe(tierSlug), [tierSlug]);
 
   return (
     <main className={PRO.page}>
@@ -106,13 +112,25 @@ export default function ConsumerPanelClient({ data }: Props) {
           <p className="text-xs text-neutral-500 mt-2">{Math.round(progressPct)}%</p>
         </div>
 
-        {/* Universo Café PRO */}
-        <Link href="/app/universo-cafe" className="block mb-6">
-          <div className="rounded-2xl border border-neutral-200 bg-white p-6 hover:border-neutral-300 transition-colors">
-            <p className="font-semibold">☕ Universo Café PRO</p>
-            <p className="text-sm text-neutral-600 mt-1">Descubrí tipos, métodos y experiencias premium</p>
-          </div>
-        </Link>
+        {/* Universo Café */}
+        {hasUniversoAccess ? (
+          <Link href="/app/universo-cafe" className="block mb-6">
+            <div className="rounded-2xl border border-neutral-200 bg-white p-6 hover:border-neutral-300 transition-colors cursor-pointer">
+              <p className="font-semibold">☕ Universo Café</p>
+              <p className="text-sm text-neutral-600 mt-1">Descubrí tipos, métodos y preparaciones</p>
+            </div>
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowUniversoLock(true)}
+            className="w-full text-left block mb-6 rounded-2xl border border-neutral-200 bg-white p-6 hover:border-neutral-300 hover:bg-neutral-50 transition cursor-pointer"
+          >
+            <p className="font-semibold">☕ Universo Café</p>
+            <p className="text-sm text-neutral-600 mt-1">Desbloqueá guías premium (solo PRO)</p>
+          </button>
+        )}
+        <UnlockModal open={showUniversoLock} onClose={() => setShowUniversoLock(false)} />
 
         {/* Generado total / Canjeado total */}
         <div className="grid grid-cols-2 gap-4 mb-6">

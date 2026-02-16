@@ -1,7 +1,8 @@
 "use client";
 
 type Props = {
-  minTierSlug: string;
+  open?: boolean;
+  minTierSlug?: string;
   missingPoints?: number;
   onClose: () => void;
 };
@@ -12,7 +13,9 @@ const TIER_LABELS: Record<string, string> = {
   leyenda: "Leyenda",
 };
 
-export default function UnlockModal({ minTierSlug, missingPoints, onClose }: Props) {
+export default function UnlockModal({ open = true, minTierSlug = "pro", missingPoints, onClose }: Props) {
+  if (!open) return null;
+
   const tierName = TIER_LABELS[minTierSlug] ?? minTierSlug;
 
   return (
