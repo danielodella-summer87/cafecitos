@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import type { CoffeeGuide } from "@/app/actions/coffeeGuides";
@@ -33,20 +32,13 @@ export default function CoffeeGuideCard({ guide, isLocked, progressPct = 0, miss
         className="group relative flex shrink-0 flex-col overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100 transition hover:border-neutral-300"
         style={{ width: "180px" }}
       >
-        <div className="relative aspect-[3/4] w-full bg-neutral-200">
-          {guide.cover_url ? (
-            <Image
-              src={guide.cover_url}
-              alt=""
-              fill
-              className={`object-cover ${isLocked ? "blur-sm scale-105" : ""}`}
-              sizes="180px"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-neutral-300 text-4xl">
-              ☕
-            </div>
-          )}
+        <div className="relative w-full aspect-[4/3] overflow-hidden rounded-xl bg-neutral-200">
+          <img
+            src={guide.cover_url || "/universo-cafe/placeholder.png"}
+            alt={guide.title}
+            className={`h-full w-full object-cover ${isLocked ? "blur-sm scale-105" : ""}`}
+            loading="lazy"
+          />
           {isLocked && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40">
               <span className="text-3xl" aria-hidden>

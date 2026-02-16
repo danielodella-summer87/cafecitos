@@ -1,0 +1,2 @@
+# Añadí aquí las imágenes de las guías (ej. placeholder.png, cafe-filtrado-vs-espresso.png)
+# y ejecutá la migración 20260218000000_coffee_guides_cover_url.sql para actualizar la DB.
