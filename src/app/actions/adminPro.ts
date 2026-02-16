@@ -149,13 +149,25 @@ export async function adminListRewards() {
   await adminGuard();
   const supabase = supabaseAdmin();
 
-  const { data, error } = await supabase
-    .from("rewards")
-    .select("*")
-    .order("created_at", { ascending: false });
+  let lastError: string | null = null;
 
-  if (error) return { ok: false as const, error: error.message };
-  return { ok: true as const, rewards: (data ?? []) as AdminReward[] };
+  const res1 = await supabase.from("rewards").select("*").order("created_at", { ascending: false });
+  if (!res1.error) {
+    return { ok: true as const, rewards: (res1.data ?? []) as AdminReward[] };
+  }
+  lastError = res1.error.message;
+
+  const res2 = await supabase.from("rewards").select("*").order("updated_at", { ascending: false });
+  if (!res2.error) {
+    return { ok: true as const, rewards: (res2.data ?? []) as AdminReward[] };
+  }
+
+  const res3 = await supabase.from("rewards").select("*");
+  if (!res3.error) {
+    return { ok: true as const, rewards: (res3.data ?? []) as AdminReward[] };
+  }
+
+  return { ok: false as const, error: lastError ?? res3.error.message };
 }
 
 export async function adminUpsertReward(input: unknown) {

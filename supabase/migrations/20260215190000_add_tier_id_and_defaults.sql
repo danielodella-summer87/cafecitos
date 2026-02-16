@@ -16,15 +16,39 @@ create table if not exists public.tiers (
   updated_at timestamptz not null default now()
 );
 
--- 2) seed tiers mínimos (si no existen)
+-- 2) asegurar columnas nuevas en tiers (compat con prod)
+alter table public.tiers add column if not exists badge_label text;
+alter table public.tiers add column if not exists badge_message text;
+alter table public.tiers add column if not exists dot_color text;
+alter table public.tiers add column if not exists sort_order integer not null default 0;
+alter table public.tiers add column if not exists is_active boolean not null default true;
+
+-- 2b) seed tiers mínimos (si no existen) - sin depender de ON CONFLICT
 insert into public.tiers (slug, name, min_points, badge_label, badge_message, dot_color, sort_order, is_active)
-values
-  ('frecuente','Frecuente',0,'Frecuente','Cliente frecuente · Sumás más rápido','#9CA3AF',10,true),
-  ('plata','Plata',25,'Plata','Cliente frecuente · Sumás más rápido','#C0C0C0',20,true),
-  ('oro','Oro',50,'Oro','Cliente destacado · Cafecitos extra en cada visita','#D4AF37',30,true),
-  ('vip','VIP',100,'VIP','Cliente VIP · Prioridad + sorpresas','#111827',40,true),
-  ('embajador','Embajador',200,'Embajador','Embajador · Beneficios exclusivos','#F97316',50,true)
-on conflict (slug) do nothing;
+select * from (
+  select
+    'starter'::text as slug,
+    'Starter'::text as name,
+    0::int as min_points,
+    'Starter'::text as badge_label,
+    'Sumando puntos'::text as badge_message,
+    '#111111'::text as dot_color,
+    10::int as sort_order,
+    true::boolean as is_active
+  where not exists (select 1 from public.tiers t where t.slug = 'starter')
+
+  union all
+  select
+    'pro'::text,
+    'Pro'::text,
+    1000::int,
+    'Pro'::text,
+    'Nivel Pro'::text,
+    '#111111'::text,
+    20::int,
+    true::boolean
+  where not exists (select 1 from public.tiers t where t.slug = 'pro')
+) s;
 
 -- 3) agregar tier_id a profiles si no existe
 do $$
