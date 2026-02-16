@@ -12,6 +12,17 @@ type Props = {
   missingPoints?: number;
 };
 
+function normalizeCoverUrl(input?: string | null): string | null {
+  if (!input) return null;
+  const v = input.trim();
+  if (!v) return null;
+
+  if (/^https?:\/\//i.test(v)) return v;
+  if (v.startsWith("/")) return v;
+  if (v.startsWith("universo-cafe/")) return `/${v}`;
+  return `/universo-cafe/${v}`;
+}
+
 export default function CoffeeGuideCard({ guide, isLocked, progressPct = 0, missingPoints }: Props) {
   const [showUnlock, setShowUnlock] = useState(false);
 
@@ -24,6 +35,9 @@ export default function CoffeeGuideCard({ guide, isLocked, progressPct = 0, miss
 
   const href = `/app/universo-cafe/${guide.id}`;
 
+  const coverSrc =
+    normalizeCoverUrl(guide.cover_url) ?? "/universo-cafe/cafe-filtrado-vs-espresso.png";
+
   return (
     <>
       <Link
@@ -34,10 +48,14 @@ export default function CoffeeGuideCard({ guide, isLocked, progressPct = 0, miss
       >
         <div className="relative w-full aspect-[4/3] overflow-hidden rounded-xl bg-neutral-200">
           <img
-            src={guide.cover_url || "/universo-cafe/placeholder.png"}
+            src={coverSrc}
             alt={guide.title}
             className={`h-full w-full object-cover ${isLocked ? "blur-sm scale-105" : ""}`}
             loading="lazy"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src =
+                "/universo-cafe/cafe-filtrado-vs-espresso.png";
+            }}
           />
           {isLocked && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40">
