@@ -2,7 +2,7 @@
 -- Requiere tabla public.coffee_guides (con content_json jsonb)
 
 insert into public.coffee_guides
-(title, excerpt, cover_url, category, min_tier_slug, reading_minutes, content_json, is_active, sort_order)
+(title, excerpt, cover_url, category, min_tier_slug, reading_minutes, content, content_json, is_active, sort_order)
 values
 
 -- 1) Tipos
@@ -13,6 +13,7 @@ values
   'tipos',
   'starter',
   4,
+  '',
   '{
     "blocks":[
       {"type":"h2","text":"Idea rápida"},
@@ -39,6 +40,7 @@ values
   'tipos',
   'starter',
   3,
+  '',
   '{
     "blocks":[
       {"type":"h2","text":"Arábica"},
@@ -68,6 +70,7 @@ values
   'tipos',
   'starter',
   3,
+  '',
   '{
     "blocks":[
       {"type":"p","text":"El tueste cambia los aromas y sabores. \"Más oscuro\" suele ser más tostado/ahumado, no necesariamente más cafeína."},
@@ -93,6 +96,7 @@ values
   'metodos',
   'starter',
   3,
+  '',
   '{
     "blocks":[
       {"type":"h2","text":"Filtrado"},
@@ -122,6 +126,7 @@ values
   'metodos',
   'starter',
   5,
+  '',
   '{
     "blocks":[
       {"type":"h2","text":"Lo que necesitás"},
@@ -153,6 +158,7 @@ values
   'metodos',
   'starter',
   5,
+  '',
   '{
     "blocks":[
       {"type":"h2","text":"Lo básico"},
@@ -185,6 +191,7 @@ values
   'metodos',
   'starter',
   4,
+  '',
   '{
     "blocks":[
       {"type":"h2","text":"Errores típicos"},
@@ -216,6 +223,7 @@ values
   'origenes',
   'starter',
   4,
+  '',
   '{
     "blocks":[
       {"type":"h2","text":"Brasil"},
@@ -239,6 +247,7 @@ values
   'origenes',
   'starter',
   4,
+  '',
   '{
     "blocks":[
       {"type":"h2","text":"Acidez (bien entendida)"},
@@ -260,6 +269,7 @@ values
   'origenes',
   'starter',
   4,
+  '',
   '{
     "blocks":[
       {"type":"h2","text":"Regla de oro"},
@@ -287,6 +297,7 @@ values
   'premium',
   'starter',
   5,
+  '',
   '{
     "blocks":[
       {"type":"h2","text":"Latte vs Cappuccino"},
@@ -314,6 +325,7 @@ values
   'premium',
   'starter',
   3,
+  '',
   '{
     "blocks":[
       {"type":"h2","text":"Lo que sí"},
