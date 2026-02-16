@@ -107,3 +107,16 @@ export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null
     cafesMap,
   };
 }
+
+/** Balance de cafecitos para un perfil (p. ej. Universo Café). */
+export async function getBalanceForProfile(profileId: string): Promise<number> {
+  const supabase = supabaseAdmin();
+  const { data: txs } = await supabase
+    .from("point_transactions")
+    .select("tx_type, from_profile_id, to_profile_id, amount")
+    .or(`from_profile_id.eq.${profileId},to_profile_id.eq.${profileId}`)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  const typed = (txs ?? []) as ConsumerTx[];
+  return computeBalance(profileId, typed);
+}

@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { logout } from "@/app/actions/logout";
 import type { ConsumerSummaryResult, ConsumerTx } from "@/app/actions/consumerSummary";
 import { getTxMeta } from "@/lib/ui/txLabels";
@@ -104,6 +105,14 @@ export default function ConsumerPanelClient({ data }: Props) {
           </div>
           <p className="text-xs text-neutral-500 mt-2">{Math.round(progressPct)}%</p>
         </div>
+
+        {/* Universo Café PRO */}
+        <Link href="/app/universo-cafe" className="block mb-6">
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 hover:border-neutral-300 transition-colors">
+            <p className="font-semibold">☕ Universo Café PRO</p>
+            <p className="text-sm text-neutral-600 mt-1">Descubrí tipos, métodos y experiencias premium</p>
+          </div>
+        </Link>
 
         {/* Generado total / Canjeado total */}
         <div className="grid grid-cols-2 gap-4 mb-6">
