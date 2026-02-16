@@ -75,13 +75,8 @@ export default function AdminPanelClient(props: Props) {
   function notify(msg: string) {
     setToast(msg);
 
-    if (toastRef.current) {
-      globalThis.clearTimeout(toastRef.current);
-    }
-
-    toastRef.current = globalThis.setTimeout(() => {
-      setToast(null);
-    }, 2500);
+    if (toastRef.current) globalThis.clearTimeout(toastRef.current);
+    toastRef.current = globalThis.setTimeout(() => setToast(null), 2500);
   }
 
   return (
