@@ -14,7 +14,7 @@ export default async function AdminPage() {
   if (!session) redirect("/login");
   if (session.role !== "admin") redirect("/login");
 
-  const [settings, tiers, rewards, profiles, cafes] = await Promise.all([
+  const [settingsRes, tiersRes, rewardsRes, profilesRes, cafesRes] = await Promise.all([
     adminGetSettings(),
     adminListTiers(),
     adminListRewards(),
@@ -22,20 +22,21 @@ export default async function AdminPage() {
     adminListCafes(),
   ]);
 
+  const serverErrors: string[] = [];
+  if (!settingsRes.ok) serverErrors.push(`Error cargando settings: ${settingsRes.error}`);
+  if (!tiersRes.ok) serverErrors.push(`Error cargando tiers: ${tiersRes.error}`);
+  if (!rewardsRes.ok) serverErrors.push(`Error cargando rewards: ${rewardsRes.error}`);
+  if (!profilesRes.ok) serverErrors.push(`Error cargando socios: ${profilesRes.error}`);
+  if (!cafesRes.ok) serverErrors.push(`Error cargando cafeterías: ${cafesRes.error}`);
+
   return (
     <AdminPanelClient
-      initialSettings={settings.ok ? settings.data : null}
-      initialTiers={tiers.ok ? tiers.data : []}
-      initialRewards={rewards.ok ? rewards.data : []}
-      initialProfiles={profiles.ok ? profiles.data : []}
-      initialCafes={cafes.ok ? cafes.data : []}
-      serverErrors={{
-        settings: settings.ok ? null : settings.error,
-        tiers: tiers.ok ? null : tiers.error,
-        rewards: rewards.ok ? null : rewards.error,
-        profiles: profiles.ok ? null : profiles.error,
-        cafes: cafes.ok ? null : cafes.error,
-      }}
+      initialSettings={settingsRes.ok ? settingsRes.settings : null}
+      initialTiers={tiersRes.ok ? tiersRes.tiers : []}
+      initialRewards={rewardsRes.ok ? rewardsRes.rewards : []}
+      initialProfiles={profilesRes.ok ? profilesRes.profiles : []}
+      initialCafes={cafesRes.ok ? cafesRes.cafes : []}
+      serverErrors={serverErrors}
     />
   );
 }

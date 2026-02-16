@@ -1,633 +1,575 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
+import { PRO } from "@/lib/ui/pro";
 import {
   adminUpdateSettings,
   adminUpsertTier,
   adminUpsertReward,
-  adminUpdateProfileActive,
-  adminSetProfileTier,
-  adminResetPinByCedula,
-  adminSetCafeActive,
   adminUpsertCafe,
+  adminUpdateCafeActive,
+  adminUpdateProfileActive,
+  adminUpdateProfileTier,
+  type AdminSettings,
+  type AdminTier,
+  type AdminReward,
 } from "@/app/actions/adminPro";
 
-type Settings = {
-  welcome_bonus_points: number;
-  max_points_per_hour: number;
-  max_points_per_day: number;
-  max_points_per_month: number;
-  max_redeem_per_day: number;
+type Props = {
+  initialSettings: AdminSettings | null;
+  initialTiers: AdminTier[];
+  initialRewards: AdminReward[];
+  initialProfiles: Array<{
+    id: string;
+    full_name: string | null;
+    cedula: string;
+    role: string;
+    is_active: boolean;
+    tier_id: string | null;
+    cafe_id: string | null;
+    created_at: string;
+  }>;
+  initialCafes: Array<{ id: string; name: string; is_active?: boolean }>;
+  serverErrors: string[];
 };
 
-type Tier = {
-  id?: string;
-  slug: string;
-  name: string;
-  min_points: number;
-  badge_label?: string | null;
-  badge_message?: string | null;
-  badge_text?: string | null;
-  dot_color?: string | null;
-  sort_order: number;
-  is_active: boolean;
-};
+type Tab = "config" | "tiers" | "rewards" | "profiles" | "cafes";
 
-type Reward = {
-  id?: string;
-  title: string;
-  description?: string | null;
-  cost_points: number;
-  is_global: boolean;
-  cafe_id?: string | null;
-  is_active: boolean;
-};
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <div className="text-sm font-medium mb-1">{label}</div>
+      {children}
+    </label>
+  );
+}
 
-type ProfileRow = {
-  id: string;
-  full_name: string | null;
-  cedula: string | null;
-  role: "consumer" | "owner" | "admin" | string;
-  phone?: string | null;
-  is_active: boolean | null;
-  tier_id: string | null;
-  cafe_id: string | null;
-  created_at: string | null;
-};
-
-type CafeRow = {
-  id: string;
-  name: string | null;
-  is_active: boolean | null;
-  created_at: string | null;
-};
-
-type AdminActionResult = { ok: true; data?: unknown } | { ok: false; error: string };
-
-export default function AdminPanelClient(props: {
-  initialSettings: Settings | null;
-  initialTiers: Tier[];
-  initialRewards: Reward[];
-  initialProfiles: ProfileRow[];
-  initialCafes: CafeRow[];
-  serverErrors: {
-    settings: string | null;
-    tiers: string | null;
-    rewards: string | null;
-    profiles: string | null;
-    cafes: string | null;
-  };
-}) {
-  const router = useRouter();
-  const [tab, setTab] = useState<"config" | "tiers" | "rewards" | "socios" | "cafes">("config");
-  const [pending, startTransition] = useTransition();
+export default function AdminPanelClient(props: Props) {
+  const [tab, setTab] = useState<Tab>("config");
   const [toast, setToast] = useState<string | null>(null);
-  const [newCafeName, setNewCafeName] = useState("");
-  const [newCafeLoading, setNewCafeLoading] = useState(false);
-  const [localCafes, setLocalCafes] = useState<CafeRow[]>(() => props.initialCafes ?? []);
-
-  useEffect(() => {
-    setLocalCafes(props.initialCafes ?? []);
-  }, [props.initialCafes]);
-
-  const settings = props.initialSettings ?? {
-    welcome_bonus_points: 5,
-    max_points_per_hour: 0,
-    max_points_per_day: 0,
-    max_points_per_month: 0,
-    max_redeem_per_day: 0,
-  };
-
-  const tiers = props.initialTiers ?? [];
-  const rewards = props.initialRewards ?? [];
-  const profiles = props.initialProfiles ?? [];
-  const cafes = localCafes;
-
-  const tierOptions = useMemo(() => {
-    const list = props.initialTiers ?? [];
-    return [{ id: "", name: "— Sin nivel —" }, ...list.map((t) => ({ id: t.id ?? "", name: `${t.name} (min ${t.min_points})` }))];
-  }, [props.initialTiers]);
-
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [settings, setSettings] = useState<AdminSettings>(
+    props.initialSettings ?? {
+      welcome_bonus_points: 5,
+      max_points_per_hour: 0,
+      max_points_per_day: 0,
+      max_points_per_month: 0,
+      max_redeem_per_day: 0,
+      cross_cafe_redeem: true,
+      show_membership_badge: true,
+    }
+  );
+
+  const [tiers, setTiers] = useState<AdminTier[]>(props.initialTiers ?? []);
+  const [rewards, setRewards] = useState<AdminReward[]>(props.initialRewards ?? []);
+  const [profiles, setProfiles] = useState(props.initialProfiles ?? []);
+  const [cafes, setCafes] = useState(props.initialCafes ?? []);
+
+  const tierOptions = useMemo(
+    () => [{ id: "", name: "— Sin nivel —" }, ...tiers.map((t) => ({ id: t.id ?? "", name: t.name }))],
+    [tiers]
+  );
+
   function notify(msg: string) {
     setToast(msg);
-    if (toastRef.current) window.clearTimeout(toastRef.current);
-    toastRef.current = window.setTimeout(() => setToast(null), 2500);
-  }
-
-  async function run(fn: () => Promise<AdminActionResult>, okMsg: string) {
-    startTransition(async () => {
-      const res = await fn();
-      if (!res.ok) {
-        notify(res.error ?? "Error");
-        return;
-      }
-      notify(okMsg);
-      router.refresh();
-    });
+    if (toastRef.current) clearTimeout(toastRef.current);
+    toastRef.current = setTimeout(() => setToast(null), 2500);
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b">
-        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Image src="/logoamorperfecto.png" alt="Amor Perfecto" width={44} height={44} className="h-11 w-auto" />
-            <div>
-              <div className="text-sm text-neutral-500">Amor Perfecto</div>
-              <div className="text-xl font-semibold">Panel Admin</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              className={`rounded-lg px-3 py-2 text-sm border ${tab === "config" ? "bg-black text-white border-black" : "bg-white"}`}
-              onClick={() => setTab("config")}
-            >
-              Configuración
-            </button>
-            <button
-              className={`rounded-lg px-3 py-2 text-sm border ${tab === "tiers" ? "bg-black text-white border-black" : "bg-white"}`}
-              onClick={() => setTab("tiers")}
-            >
-              Niveles
-            </button>
-            <button
-              className={`rounded-lg px-3 py-2 text-sm border ${tab === "rewards" ? "bg-black text-white border-black" : "bg-white"}`}
-              onClick={() => setTab("rewards")}
-            >
-              Beneficios
-            </button>
-            <button
-              className={`rounded-lg px-3 py-2 text-sm border ${tab === "socios" ? "bg-black text-white border-black" : "bg-white"}`}
-              onClick={() => setTab("socios")}
-            >
-              Socios
-            </button>
-            <button
-              className={`rounded-lg px-3 py-2 text-sm border ${tab === "cafes" ? "bg-black text-white border-black" : "bg-white"}`}
-              onClick={() => setTab("cafes")}
-            >
-              Cafeterías
-            </button>
-          </div>
+    <div className={PRO.page}>
+      <div className="mx-auto max-w-6xl px-4 py-8 space-y-6">
+        <div className="flex items-center gap-4">
+          <Image src="/logoamorperfecto.png" alt="Amor Perfecto" width={40} height={40} className="h-10 w-auto" />
+          <h1 className="text-3xl font-semibold">Panel Admin</h1>
         </div>
 
-        {toast && (
-          <div className="mx-auto max-w-6xl px-4 pb-3">
-            <div className="rounded-xl border bg-neutral-50 px-3 py-2 text-sm text-neutral-800">{toast}</div>
-          </div>
-        )}
-      </div>
+        <div className="flex gap-2 flex-wrap">
+          <button className={`px-4 py-2 rounded-md border ${tab === "config" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("config")}>Configuración</button>
+          <button className={`px-4 py-2 rounded-md border ${tab === "tiers" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("tiers")}>Niveles</button>
+          <button className={`px-4 py-2 rounded-md border ${tab === "rewards" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("rewards")}>Beneficios</button>
+          <button className={`px-4 py-2 rounded-md border ${tab === "profiles" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("profiles")}>Socios</button>
+          <button className={`px-4 py-2 rounded-md border ${tab === "cafes" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("cafes")}>Cafeterías</button>
+        </div>
 
-      <div className="mx-auto max-w-6xl px-4 py-6">
+        {props.serverErrors?.length ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+            <div className="font-semibold text-red-800 mb-2">Errores del servidor</div>
+            <ul className="list-disc pl-5 text-sm text-red-700">
+              {props.serverErrors.map((e, idx) => <li key={idx}>{e}</li>)}
+            </ul>
+            <div className="text-xs text-red-700 mt-2">
+              Si ves error de tier_id, corré la migration (supabase db push).
+            </div>
+          </div>
+        ) : null}
+
+        {toast ? (
+          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black text-white px-4 py-2 text-sm shadow">
+            {toast}
+          </div>
+        ) : null}
+
+        {/* ========================= CONFIG ========================= */}
         {tab === "config" && (
-          <Card title="Configuración global" subtitle="Controla cortesías y límites anti-abuso (por ahora hardcoded, luego full panel).">
-            {props.serverErrors.settings && (
-              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{props.serverErrors.settings}</div>
-            )}
-            <SettingsForm
-              initial={settings}
-              disabled={pending}
-              onSave={(next) => run(() => adminUpdateSettings(next), "Configuración guardada")}
-            />
-          </Card>
-        )}
-
-        {tab === "tiers" && (
-          <Card title="Niveles (tiers)" subtitle="Define los 5 niveles, mínimos de cafecitos y el mensaje tipo Starbucks (VIP · Cafecitos extra...).">
-            {props.serverErrors.tiers && (
-              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{props.serverErrors.tiers}</div>
-            )}
-            <TierEditor
-              tiers={tiers}
-              disabled={pending}
-              onUpsert={(t) => run(() => adminUpsertTier(t), "Nivel guardado")}
-            />
-          </Card>
-        )}
-
-        {tab === "rewards" && (
-          <Card title="Beneficios (rewards)" subtitle="Qué se puede canjear y cuánto cuesta. Global o por cafetería (en el futuro).">
-            {props.serverErrors.rewards && (
-              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{props.serverErrors.rewards}</div>
-            )}
-            <RewardEditor
-              rewards={rewards}
-              disabled={pending}
-              onUpsert={(r) => run(() => adminUpsertReward(r), "Beneficio guardado")}
-            />
-          </Card>
-        )}
-
-        {tab === "socios" && (
-          <Card title="Socios" subtitle="Activar/Inactivar · cambiar nivel · resetear PIN.">
-            {props.serverErrors.profiles && (
-              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{props.serverErrors.profiles}</div>
-            )}
-            <SociosPanel
-              profiles={profiles}
-              tiers={tierOptions}
-              disabled={pending}
-              onSetActive={(profile_id, is_active) => run(() => adminUpdateProfileActive({ profile_id, is_active }), "Estado actualizado")}
-              onSetTier={(profile_id, tier_id) => run(() => adminSetProfileTier({ profile_id, tier_id: tier_id || null }), "Nivel actualizado")}
-              onResetPin={(cedula, pin) => run(() => adminResetPinByCedula({ cedula, pin }), "PIN actualizado")}
-            />
-          </Card>
-        )}
-
-        {tab === "cafes" && (
-          <Card title="Cafeterías" subtitle="Activar/Inactivar cafeterías. (Luego: límites por hora/día/mes por local).">
-            {props.serverErrors.cafes && (
-              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{props.serverErrors.cafes}</div>
-            )}
-
-            <div className="rounded-xl border p-4 mb-4 bg-white">
-              <div className="font-semibold mb-2">Agregar cafetería</div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                <div className="md:col-span-2">
-                  <label className="text-sm block mb-1">Nombre</label>
-                  <input
-                    value={newCafeName}
-                    onChange={(e) => setNewCafeName(e.target.value)}
-                    className="w-full rounded-lg border px-3 py-2"
-                    placeholder="Ej: Amor Perfecto — Centro"
-                    maxLength={60}
-                  />
-                </div>
-                <button
-                  type="button"
-                  disabled={newCafeLoading || newCafeName.trim().length < 3}
-                  className="rounded-lg px-4 py-2 bg-black text-white disabled:opacity-60"
-                  onClick={async () => {
-                    const name = newCafeName.trim();
-                    if (name.length < 3) return;
-                    setNewCafeLoading(true);
-                    try {
-                      const res = await adminUpsertCafe({ name, is_active: true });
-                      if (!res.ok) {
-                        notify((res as { error?: string }).error ?? "No se pudo crear");
-                        return;
-                      }
-                      const data = res.data as { id?: string; name?: string; is_active?: boolean } | undefined;
-                      setLocalCafes((prev) => [{ id: data?.id ?? "", name: data?.name ?? name, is_active: data?.is_active ?? true, created_at: null }, ...prev]);
-                      setNewCafeName("");
-                      notify("✅ Cafetería creada");
-                    } finally {
-                      setNewCafeLoading(false);
-                    }
-                  }}
-                >
-                  {newCafeLoading ? "Creando..." : "Crear"}
-                </button>
-              </div>
-            </div>
-
-            <CafesPanel
-              cafes={cafes}
-              disabled={pending}
-              onSetActive={(cafe_id, is_active) => run(() => adminSetCafeActive({ cafe_id, is_active }), "Cafetería actualizada")}
-            />
-          </Card>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Card(props: { title: string; subtitle?: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border bg-white shadow-sm">
-      <div className="p-5 border-b">
-        <div className="text-lg font-semibold">{props.title}</div>
-        {props.subtitle && <div className="text-sm text-neutral-500 mt-1">{props.subtitle}</div>}
-      </div>
-      <div className="p-5">{props.children}</div>
-    </div>
-  );
-}
-
-function Field(props: { label: string; children: React.ReactNode; hint?: string }) {
-  return (
-    <div>
-      <div className="text-sm font-medium">{props.label}</div>
-      {props.hint && <div className="text-xs text-neutral-500 mb-1">{props.hint}</div>}
-      {props.children}
-    </div>
-  );
-}
-
-function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      {...props}
-      className={`w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10 ${props.className ?? ""}`}
-    />
-  );
-}
-
-function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <textarea
-      {...props}
-      className={`w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10 ${props.className ?? ""}`}
-    />
-  );
-}
-
-function Toggle(props: { value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      disabled={props.disabled}
-      onClick={() => props.onChange(!props.value)}
-      className={`px-3 py-2 rounded-lg text-sm border ${props.value ? "bg-black text-white border-black" : "bg-white"} disabled:opacity-60`}
-    >
-      {props.value ? "Activo" : "Inactivo"}
-    </button>
-  );
-}
-
-function SettingsForm(props: { initial: Settings; disabled?: boolean; onSave: (next: Settings) => void }) {
-  const [s, setS] = useState<Settings>(props.initial);
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Field label="Cortesía al registrarse" hint="Cafecitos gratis al dar de alta un socio (hoy: 5).">
-        <Input type="number" min={0} value={s.welcome_bonus_points} onChange={(e) => setS({ ...s, welcome_bonus_points: Number(e.target.value) })} disabled={props.disabled} />
-      </Field>
-      <Field label="Máx cafecitos por hora (por cafetería)" hint="0 = sin límite (por ahora).">
-        <Input type="number" min={0} value={s.max_points_per_hour} onChange={(e) => setS({ ...s, max_points_per_hour: Number(e.target.value) })} disabled={props.disabled} />
-      </Field>
-      <Field label="Máx cafecitos por día (por cafetería)" hint="0 = sin límite (por ahora).">
-        <Input type="number" min={0} value={s.max_points_per_day} onChange={(e) => setS({ ...s, max_points_per_day: Number(e.target.value) })} disabled={props.disabled} />
-      </Field>
-      <Field label="Máx cafecitos por mes (por cafetería)" hint="0 = sin límite (por ahora).">
-        <Input type="number" min={0} value={s.max_points_per_month} onChange={(e) => setS({ ...s, max_points_per_month: Number(e.target.value) })} disabled={props.disabled} />
-      </Field>
-      <Field label="Máx canjes por día (por socio)" hint="0 = sin límite (por ahora).">
-        <Input type="number" min={0} value={s.max_redeem_per_day} onChange={(e) => setS({ ...s, max_redeem_per_day: Number(e.target.value) })} disabled={props.disabled} />
-      </Field>
-      <div className="md:col-span-2 pt-2">
-        <button type="button" disabled={props.disabled} onClick={() => props.onSave(s)} className="rounded-lg bg-black text-white px-4 py-2 text-sm disabled:opacity-60">
-          Guardar configuración
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function TierEditor(props: { tiers: Tier[]; disabled?: boolean; onUpsert: (tier: Tier) => void }) {
-  const [draft, setDraft] = useState<Tier>({
-    slug: "plata",
-    name: "Plata",
-    min_points: 0,
-    badge_label: "Cliente frecuente",
-    badge_message: "Sumás más rápido",
-    dot_color: "silver",
-    sort_order: 1,
-    is_active: true,
-  });
-
-  return (
-    <div className="space-y-6">
-      <div className="rounded-xl border p-4">
-        <div className="text-sm font-semibold mb-3">Crear / editar nivel</div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Field label="Slug">
-            <Input value={draft.slug} onChange={(e) => setDraft({ ...draft, slug: e.target.value })} disabled={props.disabled} />
-          </Field>
-          <Field label="Nombre">
-            <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} disabled={props.disabled} />
-          </Field>
-          <Field label="Mín cafecitos">
-            <Input type="number" min={0} value={draft.min_points} onChange={(e) => setDraft({ ...draft, min_points: Number(e.target.value) })} disabled={props.disabled} />
-          </Field>
-          <Field label="Etiqueta (badge)">
-            <Input value={draft.badge_label ?? ""} onChange={(e) => setDraft({ ...draft, badge_label: e.target.value })} disabled={props.disabled} />
-          </Field>
-          <Field label="Mensaje corto">
-            <Input value={draft.badge_message ?? ""} onChange={(e) => setDraft({ ...draft, badge_message: e.target.value })} disabled={props.disabled} />
-          </Field>
-          <Field label="Dot color (ej: silver, gold, #aaa)">
-            <Input value={draft.dot_color ?? ""} onChange={(e) => setDraft({ ...draft, dot_color: e.target.value })} disabled={props.disabled} />
-          </Field>
-          <Field label="Orden">
-            <Input type="number" min={0} value={draft.sort_order} onChange={(e) => setDraft({ ...draft, sort_order: Number(e.target.value) })} disabled={props.disabled} />
-          </Field>
-          <Field label="Estado">
-            <div className="pt-1">
-              <Toggle value={draft.is_active} onChange={(v) => setDraft({ ...draft, is_active: v })} disabled={props.disabled} />
-            </div>
-          </Field>
-        </div>
-        <div className="pt-3 flex gap-2">
-          <button type="button" disabled={props.disabled} onClick={() => props.onUpsert(draft)} className="rounded-lg bg-black text-white px-4 py-2 text-sm disabled:opacity-60">
-            Guardar nivel
-          </button>
-          <button
-            type="button"
-            disabled={props.disabled}
-            onClick={() => setDraft({ slug: "", name: "", min_points: 0, badge_label: "", badge_message: "", dot_color: "", sort_order: 0, is_active: true })}
-            className="rounded-lg border px-4 py-2 text-sm disabled:opacity-60"
-          >
-            Nuevo
-          </button>
-        </div>
-      </div>
-      <div className="rounded-xl border overflow-hidden">
-        <div className="px-4 py-3 border-b text-sm font-semibold">Niveles actuales</div>
-        <div className="divide-y">
-          {props.tiers.map((t) => (
-            <button key={t.id ?? t.slug} type="button" onClick={() => setDraft({ ...t, badge_label: t.badge_label ?? t.badge_text ?? "", badge_message: t.badge_message ?? t.badge_text ?? "" })} className="w-full text-left px-4 py-3 hover:bg-neutral-50">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="font-semibold">{t.name} <span className="text-xs text-neutral-500">({t.slug})</span></div>
-                  <div className="text-sm text-neutral-600">min {t.min_points} · {t.badge_label ?? t.badge_text ?? "—"} · {t.badge_message ?? t.badge_text ?? "—"}</div>
-                </div>
-                <div className={`text-xs px-2 py-1 rounded-full border ${t.is_active ? "bg-black text-white border-black" : "bg-white"}`}>{t.is_active ? "Activo" : "Inactivo"}</div>
-              </div>
-            </button>
-          ))}
-          {props.tiers.length === 0 && <div className="px-4 py-4 text-sm text-neutral-500">No hay niveles todavía.</div>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RewardEditor(props: { rewards: Reward[]; disabled?: boolean; onUpsert: (reward: Reward) => void }) {
-  const [draft, setDraft] = useState<Reward>({
-    title: "Café gratis",
-    description: "Canjeá por un café de cortesía",
-    cost_points: 100,
-    is_global: true,
-    cafe_id: null,
-    is_active: true,
-  });
-
-  return (
-    <div className="space-y-6">
-      <div className="rounded-xl border p-4">
-        <div className="text-sm font-semibold mb-3">Crear / editar beneficio</div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Field label="Título">
-            <Input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} disabled={props.disabled} />
-          </Field>
-          <Field label="Costo (cafecitos)">
-            <Input type="number" min={0} value={draft.cost_points} onChange={(e) => setDraft({ ...draft, cost_points: Number(e.target.value) })} disabled={props.disabled} />
-          </Field>
-          <Field label="Estado">
-            <div className="pt-1">
-              <Toggle value={draft.is_active} onChange={(v) => setDraft({ ...draft, is_active: v })} disabled={props.disabled} />
-            </div>
-          </Field>
-          <div className="md:col-span-3">
-            <Field label="Descripción">
-              <Textarea value={draft.description ?? ""} onChange={(e) => setDraft({ ...draft, description: e.target.value })} disabled={props.disabled} rows={2} />
-            </Field>
-          </div>
-          <Field label="Global">
-            <div className="pt-1">
-              <Toggle value={draft.is_global} onChange={(v) => setDraft({ ...draft, is_global: v })} disabled={props.disabled} />
-            </div>
-          </Field>
-          <Field label="Cafe ID (si no es global)" hint="Dejalo vacío por ahora.">
-            <Input value={draft.cafe_id ?? ""} onChange={(e) => setDraft({ ...draft, cafe_id: e.target.value || null })} disabled={props.disabled} />
-          </Field>
-        </div>
-        <div className="pt-3 flex gap-2">
-          <button type="button" disabled={props.disabled} onClick={() => props.onUpsert(draft)} className="rounded-lg bg-black text-white px-4 py-2 text-sm disabled:opacity-60">
-            Guardar beneficio
-          </button>
-          <button type="button" disabled={props.disabled} onClick={() => setDraft({ title: "", description: "", cost_points: 0, is_global: true, cafe_id: null, is_active: true })} className="rounded-lg border px-4 py-2 text-sm disabled:opacity-60">
-            Nuevo
-          </button>
-        </div>
-      </div>
-      <div className="rounded-xl border overflow-hidden">
-        <div className="px-4 py-3 border-b text-sm font-semibold">Beneficios actuales</div>
-        <div className="divide-y">
-          {props.rewards.map((r) => (
-            <button key={r.id ?? r.title} type="button" onClick={() => setDraft(r)} className="w-full text-left px-4 py-3 hover:bg-neutral-50">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="font-semibold">{r.title}</div>
-                  <div className="text-sm text-neutral-600">{r.cost_points} cafecitos · {r.is_global ? "Global" : "Por cafetería"} · {r.description ?? "—"}</div>
-                </div>
-                <div className={`text-xs px-2 py-1 rounded-full border ${r.is_active ? "bg-black text-white border-black" : "bg-white"}`}>{r.is_active ? "Activo" : "Inactivo"}</div>
-              </div>
-            </button>
-          ))}
-          {props.rewards.length === 0 && <div className="px-4 py-4 text-sm text-neutral-500">No hay beneficios todavía.</div>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SociosPanel(props: {
-  profiles: ProfileRow[];
-  tiers: { id: string; name: string }[];
-  disabled?: boolean;
-  onSetActive: (profile_id: string, is_active: boolean) => void;
-  onSetTier: (profile_id: string, tier_id: string) => void;
-  onResetPin: (cedula: string, pin: string) => void;
-}) {
-  const [q, setQ] = useState("");
-  const [pinCedula, setPinCedula] = useState("");
-  const [pinNew, setPinNew] = useState("");
-
-  const list = useMemo(() => {
-    const qq = q.trim().toLowerCase();
-    if (!qq) return props.profiles;
-    return props.profiles.filter((p) => {
-      const name = (p.full_name ?? "").toLowerCase();
-      const ced = (p.cedula ?? "").toLowerCase();
-      return name.includes(qq) || ced.includes(qq) || (p.role ?? "").toLowerCase().includes(qq);
-    });
-  }, [q, props.profiles]);
-
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-col md:flex-row gap-3 md:items-end md:justify-between">
-        <Field label="Buscar socio">
-          <Input placeholder="Nombre, cédula o rol..." value={q} onChange={(e) => setQ(e.target.value)} disabled={props.disabled} />
-        </Field>
-        <div className="rounded-xl border p-3 md:w-[420px]">
-          <div className="text-sm font-semibold mb-2">Reset PIN por cédula</div>
-          <div className="grid grid-cols-2 gap-2">
-            <Input placeholder="Cédula" value={pinCedula} onChange={(e) => setPinCedula(e.target.value)} disabled={props.disabled} />
-            <Input placeholder="Nuevo PIN (4)" value={pinNew} onChange={(e) => setPinNew(e.target.value)} disabled={props.disabled} />
-          </div>
-          <button
-            type="button"
-            disabled={props.disabled || pinCedula.trim().length < 6 || pinNew.trim().length !== 4}
-            onClick={() => props.onResetPin(pinCedula.trim(), pinNew.trim())}
-            className="mt-2 w-full rounded-lg bg-black text-white px-3 py-2 text-sm disabled:opacity-60"
-          >
-            Aplicar PIN
-          </button>
-          <div className="mt-1 text-xs text-neutral-500">Tip: esto permite ayudar rápido al cliente sin borrar su cuenta.</div>
-        </div>
-      </div>
-      <div className="rounded-xl border overflow-hidden">
-        <div className="px-4 py-3 border-b text-sm font-semibold">Listado (máx 200)</div>
-        <div className="divide-y">
-          {list.map((p) => (
-            <div key={p.id} className="px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div>
-                <div className="font-semibold">{p.full_name ?? "Sin nombre"} <span className="text-xs text-neutral-500">· {p.role}</span></div>
-                <div className="text-sm text-neutral-600">Cédula: {p.cedula ?? "—"} · Tel: {p.phone ?? "—"}</div>
-              </div>
-              <div className="flex flex-col md:flex-row gap-2 md:items-center">
-                <select className="rounded-lg border px-3 py-2 text-sm" disabled={props.disabled} value={p.tier_id ?? ""} onChange={(e) => props.onSetTier(p.id, e.target.value)}>
-                  {props.tiers.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  disabled={props.disabled}
-                  onClick={() => props.onSetActive(p.id, !(p.is_active ?? true))}
-                  className={`rounded-lg px-3 py-2 text-sm border ${(p.is_active ?? true) ? "bg-white" : "bg-black text-white border-black"} disabled:opacity-60`}
-                >
-                  {(p.is_active ?? true) ? "Desactivar" : "Activar"}
-                </button>
-              </div>
-            </div>
-          ))}
-          {list.length === 0 && <div className="px-4 py-4 text-sm text-neutral-500">No hay resultados.</div>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CafesPanel(props: { cafes: CafeRow[]; disabled?: boolean; onSetActive: (cafe_id: string, is_active: boolean) => void }) {
-  return (
-    <div className="rounded-xl border overflow-hidden">
-      <div className="px-4 py-3 border-b text-sm font-semibold">Listado (máx 200)</div>
-      <div className="divide-y">
-        {props.cafes.map((c) => (
-          <div key={c.id} className="px-4 py-3 flex items-center justify-between gap-3">
+          <div className="rounded-2xl border p-6 space-y-6 bg-white">
             <div>
-              <div className="font-semibold">{c.name ?? "Sin nombre"}</div>
-              <div className="text-xs text-neutral-500">ID: {c.id}</div>
+              <div className="text-xl font-semibold">Configuración global</div>
+              <div className="text-sm text-neutral-500">Bonus, límites, reglas.</div>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Cortesía bienvenida (cafecitos)">
+                <input className="w-full border rounded-lg px-3 py-2" type="number"
+                  value={settings.welcome_bonus_points}
+                  onChange={(e) => setSettings({ ...settings, welcome_bonus_points: Number(e.target.value) })}
+                />
+              </Field>
+
+              <Field label="Máx. canje por día (por socio)">
+                <input className="w-full border rounded-lg px-3 py-2" type="number"
+                  value={settings.max_redeem_per_day}
+                  onChange={(e) => setSettings({ ...settings, max_redeem_per_day: Number(e.target.value) })}
+                />
+              </Field>
+
+              <Field label="Máx. asignación por hora (por cafetería)">
+                <input className="w-full border rounded-lg px-3 py-2" type="number"
+                  value={settings.max_points_per_hour}
+                  onChange={(e) => setSettings({ ...settings, max_points_per_hour: Number(e.target.value) })}
+                />
+              </Field>
+
+              <Field label="Máx. asignación por día (por cafetería)">
+                <input className="w-full border rounded-lg px-3 py-2" type="number"
+                  value={settings.max_points_per_day}
+                  onChange={(e) => setSettings({ ...settings, max_points_per_day: Number(e.target.value) })}
+                />
+              </Field>
+
+              <Field label="Máx. asignación por mes (por cafetería)">
+                <input className="w-full border rounded-lg px-3 py-2" type="number"
+                  value={settings.max_points_per_month}
+                  onChange={(e) => setSettings({ ...settings, max_points_per_month: Number(e.target.value) })}
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="flex items-start gap-3 border rounded-xl p-4">
+                <input
+                  type="checkbox"
+                  checked={settings.cross_cafe_redeem}
+                  onChange={(e) => setSettings({ ...settings, cross_cafe_redeem: e.target.checked })}
+                  className="mt-1"
+                />
+                <div>
+                  <div className="font-medium">Canje cruzado entre cafeterías</div>
+                  <div className="text-sm text-neutral-500">Si está activo, el socio canjea en cualquier cafetería.</div>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-3 border rounded-xl p-4">
+                <input
+                  type="checkbox"
+                  checked={settings.show_membership_badge}
+                  onChange={(e) => setSettings({ ...settings, show_membership_badge: e.target.checked })}
+                  className="mt-1"
+                />
+                <div>
+                  <div className="font-medium">Mostrar badge de membresía</div>
+                  <div className="text-sm text-neutral-500">Muestra la barra negra con el nivel del socio.</div>
+                </div>
+              </label>
+            </div>
+
             <button
-              type="button"
-              disabled={props.disabled}
-              onClick={() => props.onSetActive(c.id, !(c.is_active ?? true))}
-              className={`rounded-lg px-3 py-2 text-sm border ${(c.is_active ?? true) ? "bg-white" : "bg-black text-white border-black"} disabled:opacity-60`}
+              className="rounded-lg bg-black text-white px-4 py-2"
+              onClick={async () => {
+                const res = await adminUpdateSettings(settings);
+                if (!res.ok) return notify(`Error: ${res.error}`);
+                notify("✅ Configuración guardada");
+              }}
             >
-              {(c.is_active ?? true) ? "Desactivar" : "Activar"}
+              Guardar configuración
             </button>
           </div>
-        ))}
-        {props.cafes.length === 0 && <div className="px-4 py-4 text-sm text-neutral-500">No hay cafeterías.</div>}
+        )}
+
+        {/* ========================= TIERS ========================= */}
+        {tab === "tiers" && (
+          <div className="rounded-2xl border p-6 bg-white space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xl font-semibold">Niveles</div>
+                <div className="text-sm text-neutral-500">Editá nombre, mínimo de cafecitos, badge y orden.</div>
+              </div>
+              <button
+                className="rounded-lg border px-4 py-2 hover:bg-neutral-50"
+                onClick={() =>
+                  setTiers([
+                    {
+                      slug: "nuevo",
+                      name: "Nuevo nivel",
+                      min_points: 0,
+                      badge_label: "Nuevo",
+                      badge_message: "Mensaje",
+                      dot_color: "#9CA3AF",
+                      sort_order: tiers.length + 1,
+                      is_active: true,
+                    },
+                    ...tiers,
+                  ])
+                }
+              >
+                + Agregar nivel
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {tiers.map((t, idx) => (
+                <div key={t.id ?? `new-${idx}`} className="rounded-xl border p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                    <Field label="Slug">
+                      <input className="w-full border rounded-lg px-3 py-2" value={t.slug}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setTiers((arr) => arr.map((x) => (x === t ? { ...x, slug: v } : x)));
+                        }}
+                      />
+                    </Field>
+                    <Field label="Nombre">
+                      <input className="w-full border rounded-lg px-3 py-2" value={t.name}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setTiers((arr) => arr.map((x) => (x === t ? { ...x, name: v } : x)));
+                        }}
+                      />
+                    </Field>
+                    <Field label="Mín. cafecitos">
+                      <input className="w-full border rounded-lg px-3 py-2" type="number" value={t.min_points ?? 0}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setTiers((arr) => arr.map((x) => (x === t ? { ...x, min_points: v } : x)));
+                        }}
+                      />
+                    </Field>
+                    <Field label="Badge (texto corto)">
+                      <input className="w-full border rounded-lg px-3 py-2" value={t.badge_label ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setTiers((arr) => arr.map((x) => (x === t ? { ...x, badge_label: v } : x)));
+                        }}
+                      />
+                    </Field>
+                    <Field label="Mensaje">
+                      <input className="w-full border rounded-lg px-3 py-2" value={t.badge_message ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setTiers((arr) => arr.map((x) => (x === t ? { ...x, badge_message: v } : x)));
+                        }}
+                      />
+                    </Field>
+                    <Field label="Orden">
+                      <input className="w-full border rounded-lg px-3 py-2" type="number" value={t.sort_order ?? 0}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setTiers((arr) => arr.map((x) => (x === t ? { ...x, sort_order: v } : x)));
+                        }}
+                      />
+                    </Field>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-3">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={!!t.is_active}
+                        onChange={(e) => setTiers((arr) => arr.map((x) => (x === t ? { ...x, is_active: e.target.checked } : x)))}
+                      />
+                      Activo
+                    </label>
+
+                    <button
+                      className="rounded-lg bg-black text-white px-4 py-2"
+                      onClick={async () => {
+                        const res = await adminUpsertTier(t);
+                        if (!res.ok) return notify(`Error: ${res.error}`);
+                        notify("✅ Nivel guardado");
+                      }}
+                    >
+                      Guardar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ========================= REWARDS ========================= */}
+        {tab === "rewards" && (
+          <div className="rounded-2xl border p-6 bg-white space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xl font-semibold">Beneficios</div>
+                <div className="text-sm text-neutral-500">Editá título, costo y activo. (Global o por cafetería)</div>
+              </div>
+              <button
+                className="rounded-lg border px-4 py-2 hover:bg-neutral-50"
+                onClick={() =>
+                  setRewards([
+                    {
+                      title: "Nuevo beneficio",
+                      description: "Descripción",
+                      cost_points: 10,
+                      is_global: true,
+                      cafe_id: null,
+                      is_active: true,
+                    },
+                    ...rewards,
+                  ])
+                }
+              >
+                + Agregar beneficio
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {rewards.map((r, idx) => (
+                <div key={r.id ?? `new-${idx}`} className="rounded-xl border p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <Field label="Título">
+                      <input className="w-full border rounded-lg px-3 py-2" value={r.title}
+                        onChange={(e) => setRewards((arr) => arr.map((x) => (x === r ? { ...x, title: e.target.value } : x)))}
+                      />
+                    </Field>
+
+                    <Field label="Costo (cafecitos)">
+                      <input className="w-full border rounded-lg px-3 py-2" type="number" value={r.cost_points ?? 0}
+                        onChange={(e) => setRewards((arr) => arr.map((x) => (x === r ? { ...x, cost_points: Number(e.target.value) } : x)))}
+                      />
+                    </Field>
+
+                    <Field label="Alcance">
+                      <select className="w-full border rounded-lg px-3 py-2"
+                        value={r.is_global ? "global" : "cafe"}
+                        onChange={(e) => {
+                          const isGlobal = e.target.value === "global";
+                          setRewards((arr) => arr.map((x) => (x === r ? { ...x, is_global: isGlobal, cafe_id: isGlobal ? null : (cafes[0]?.id ?? null) } : x)));
+                        }}
+                      >
+                        <option value="global">Global</option>
+                        <option value="cafe">Por cafetería</option>
+                      </select>
+                    </Field>
+
+                    <Field label="Cafetería (si aplica)">
+                      <select className="w-full border rounded-lg px-3 py-2"
+                        disabled={!!r.is_global}
+                        value={r.cafe_id ?? ""}
+                        onChange={(e) => setRewards((arr) => arr.map((x) => (x === r ? { ...x, cafe_id: e.target.value || null } : x)))}
+                      >
+                        <option value="">—</option>
+                        {cafes.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+
+                  <Field label="Descripción">
+                    <textarea className="w-full border rounded-lg px-3 py-2 mt-2" rows={2}
+                      value={r.description ?? ""}
+                      onChange={(e) => setRewards((arr) => arr.map((x) => (x === r ? { ...x, description: e.target.value } : x)))}
+                    />
+                  </Field>
+
+                  <div className="flex items-center justify-between mt-3">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={!!r.is_active}
+                        onChange={(e) => setRewards((arr) => arr.map((x) => (x === r ? { ...x, is_active: e.target.checked } : x)))}
+                      />
+                      Activo
+                    </label>
+
+                    <button
+                      className="rounded-lg bg-black text-white px-4 py-2"
+                      onClick={async () => {
+                        const res = await adminUpsertReward(r);
+                        if (!res.ok) return notify(`Error: ${res.error}`);
+                        notify("✅ Beneficio guardado");
+                      }}
+                    >
+                      Guardar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ========================= PROFILES ========================= */}
+        {tab === "profiles" && (
+          <div className="rounded-2xl border p-6 bg-white space-y-4">
+            <div>
+              <div className="text-xl font-semibold">Socios</div>
+              <div className="text-sm text-neutral-500">Activar/desactivar (admin NO), asignar nivel.</div>
+            </div>
+
+            <div className="overflow-auto border rounded-xl">
+              <table className="min-w-[900px] w-full text-sm">
+                <thead className="bg-neutral-50">
+                  <tr className="text-left">
+                    <th className="p-3">Nombre</th>
+                    <th className="p-3">CI</th>
+                    <th className="p-3">Rol</th>
+                    <th className="p-3">Nivel</th>
+                    <th className="p-3">Activo</th>
+                    <th className="p-3">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {profiles.map((p) => (
+                    <tr key={p.id} className="border-t">
+                      <td className="p-3">{p.full_name ?? "(sin nombre)"}</td>
+                      <td className="p-3">{p.cedula}</td>
+                      <td className="p-3">{p.role}</td>
+                      <td className="p-3">
+                        <select
+                          className="border rounded-lg px-2 py-1"
+                          value={p.tier_id ?? ""}
+                          onChange={(e) =>
+                            setProfiles((arr) =>
+                              arr.map((x) => (x.id === p.id ? { ...x, tier_id: e.target.value || null } : x))
+                            )
+                          }
+                        >
+                          {tierOptions.map((t) => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="p-3">
+                        <input
+                          type="checkbox"
+                          checked={!!p.is_active}
+                          disabled={p.role === "admin"}
+                          onChange={(e) =>
+                            setProfiles((arr) => arr.map((x) => (x.id === p.id ? { ...x, is_active: e.target.checked } : x)))
+                          }
+                        />
+                      </td>
+                      <td className="p-3 flex gap-2">
+                        <button
+                          className="border rounded-lg px-3 py-1 hover:bg-neutral-50"
+                          onClick={async () => {
+                            const r = await adminUpdateProfileTier({ profile_id: p.id, tier_id: p.tier_id ?? null });
+                            if (!r.ok) return notify(`Error: ${r.error}`);
+                            notify("✅ Nivel actualizado");
+                          }}
+                        >
+                          Guardar nivel
+                        </button>
+
+                        <button
+                          className={`border rounded-lg px-3 py-1 ${p.role === "admin" ? "opacity-50 cursor-not-allowed" : "hover:bg-neutral-50"}`}
+                          disabled={p.role === "admin"}
+                          onClick={async () => {
+                            const r = await adminUpdateProfileActive({ profile_id: p.id, is_active: !!p.is_active });
+                            if (!r.ok) return notify(`Error: ${r.error}`);
+                            notify("✅ Estado actualizado");
+                          }}
+                        >
+                          Guardar activo
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="text-xs text-neutral-500">
+              Admin no se puede desactivar.
+            </div>
+          </div>
+        )}
+
+        {/* ========================= CAFES ========================= */}
+        {tab === "cafes" && (
+          <div className="rounded-2xl border p-6 bg-white space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xl font-semibold">Cafeterías</div>
+                <div className="text-sm text-neutral-500">Activar/desactivar, editar nombre, y agregar nuevas.</div>
+              </div>
+              <button
+                className="rounded-lg border px-4 py-2 hover:bg-neutral-50"
+                onClick={() => setCafes([{ id: "", name: "Nueva cafetería", is_active: true }, ...cafes])}
+              >
+                + Agregar cafetería
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {cafes.map((c, idx) => (
+                <div key={c.id || `new-${idx}`} className="rounded-xl border p-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                  <div className="flex-1">
+                    <Field label="Nombre">
+                      <input
+                        className="w-full border rounded-lg px-3 py-2"
+                        value={c.name}
+                        onChange={(e) =>
+                          setCafes((arr) => arr.map((x) => (x === c ? { ...x, name: e.target.value } : x)))
+                        }
+                      />
+                    </Field>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm mt-6 md:mt-0">
+                    <input
+                      type="checkbox"
+                      checked={c.is_active ?? true}
+                      onChange={(e) =>
+                        setCafes((arr) => arr.map((x) => (x === c ? { ...x, is_active: e.target.checked } : x)))
+                      }
+                    />
+                    Activa
+                  </label>
+
+                  <div className="flex gap-2 mt-6 md:mt-0">
+                    <button
+                      className="rounded-lg bg-black text-white px-4 py-2"
+                      onClick={async () => {
+                        const payload = { id: c.id || undefined, name: c.name, is_active: !!c.is_active };
+                        const r = await adminUpsertCafe(payload);
+                        if (!r.ok) return notify(`Error: ${r.error}`);
+                        notify("✅ Cafetería guardada");
+                      }}
+                    >
+                      Guardar
+                    </button>
+
+                    {c.id ? (
+                      <button
+                        className="rounded-lg border px-4 py-2 hover:bg-neutral-50"
+                        onClick={async () => {
+                          const r = await adminUpdateCafeActive({ cafe_id: c.id, is_active: !!c.is_active });
+                          if (!r.ok) return notify(`Error: ${r.error}`);
+                          notify("✅ Estado actualizado");
+                        }}
+                      >
+                        Guardar activa
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
