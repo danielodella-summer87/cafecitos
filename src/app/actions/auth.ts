@@ -10,13 +10,6 @@ const loginSchema = z.object({
   pin: z.string().min(4),
 });
 
-const RegisterSchema = z.object({
-  cedula: z.string().min(6),
-  pin: z.string().min(3),
-  phone: z.string().optional(),
-  full_name: z.string().optional(),
-});
-
 const CreateOwnerSchema = z.object({
   cedula: z.string().min(6),
   pin: z.string().min(3),

@@ -1,138 +1,277 @@
 "use server";
 
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
+import { requireAdmin } from "@/lib/auth/roles";
 
-function requireAdmin(session: Awaited<ReturnType<typeof getSession>>) {
-  if (!session) throw new Error("No autenticado");
-  if (session.role !== "admin") throw new Error("Solo admin");
-}
+// --------------------
+// Schemas
+// --------------------
+const SettingsSchema = z.object({
+  welcome_bonus_points: z.coerce.number().int().min(0).max(1000).default(5),
+  max_points_per_hour: z.coerce.number().int().min(0).max(100000).default(0),
+  max_points_per_day: z.coerce.number().int().min(0).max(100000).default(0),
+  max_points_per_month: z.coerce.number().int().min(0).max(100000).default(0),
+  max_redeem_per_day: z.coerce.number().int().min(0).max(100000).default(0),
+});
 
-export async function adminGetSettings() {
+const TierSchema = z.object({
+  id: z.string().uuid().optional(),
+  slug: z.string().min(2).max(32),
+  name: z.string().min(2).max(32),
+  min_points: z.coerce.number().int().min(0).max(1000000),
+  badge_label: z.string().max(40).optional().nullable(),
+  badge_message: z.string().max(120).optional().nullable(),
+  dot_color: z.string().max(32).optional().nullable(),
+  sort_order: z.coerce.number().int().min(0).max(999).default(0),
+  is_active: z.coerce.boolean().default(true),
+});
+
+const RewardSchema = z.object({
+  id: z.string().uuid().optional(),
+  title: z.string().min(2).max(60),
+  description: z.string().max(160).optional().nullable(),
+  cost_points: z.coerce.number().int().min(0).max(100000),
+  is_global: z.coerce.boolean().default(true),
+  cafe_id: z.string().uuid().optional().nullable(),
+  is_active: z.coerce.boolean().default(true),
+});
+
+const ProfilePinSchema = z.object({
+  cedula: z.string().min(6).max(20),
+  pin: z.string().min(4).max(4),
+});
+
+const ProfileTierSchema = z.object({
+  profile_id: z.string().uuid(),
+  tier_id: z.string().uuid().nullable(),
+});
+
+const ProfileActiveSchema = z.object({
+  profile_id: z.string().uuid(),
+  is_active: z.coerce.boolean(),
+});
+
+const CafeActiveSchema = z.object({
+  cafe_id: z.string().uuid(),
+  is_active: z.coerce.boolean(),
+});
+
+// --------------------
+// Helpers
+// --------------------
+async function adminGuard() {
   const session = await getSession();
   requireAdmin(session);
+  return session;
+}
 
+function ok<T>(data?: T) {
+  return { ok: true as const, data };
+}
+function fail(message: string) {
+  return { ok: false as const, error: message };
+}
+
+// --------------------
+// SETTINGS (singleton)
+// --------------------
+export async function adminGetSettings() {
+  await adminGuard();
   const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("settings_global")
     .select("*")
-    .eq("id", true)
+    .limit(1)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) return fail(error.message);
 
-  return (
-    data ?? {
-      id: true,
-      welcome_bonus_points: 5,
-      max_points_per_hour: 50,
-      max_points_per_day: 300,
-      max_points_per_month: 6000,
-      max_redeem_per_day: 50,
-    }
-  );
+  const merged = {
+    welcome_bonus_points: data?.welcome_bonus_points ?? 5,
+    max_points_per_hour: data?.max_points_per_hour ?? 0,
+    max_points_per_day: data?.max_points_per_day ?? 0,
+    max_points_per_month: data?.max_points_per_month ?? 0,
+    max_redeem_per_day: data?.max_redeem_per_day ?? 0,
+  };
+
+  return ok(merged);
 }
-
-const settingsSchema = z.object({
-  welcome_bonus_points: z.number().int().min(0).max(100),
-  max_points_per_hour: z.number().int().min(0).max(1000),
-  max_points_per_day: z.number().int().min(0).max(20000),
-  max_points_per_month: z.number().int().min(0).max(200000),
-  max_redeem_per_day: z.number().int().min(0).max(1000),
-});
 
 export async function adminUpdateSettings(input: unknown) {
-  const session = await getSession();
-  requireAdmin(session);
+  await adminGuard();
+  const parsed = SettingsSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.message);
 
-  const parsed = settingsSchema.parse(input);
   const supabase = supabaseAdmin();
-
   const { error } = await supabase
     .from("settings_global")
-    .upsert({ id: true, ...parsed }, { onConflict: "id" });
+    .upsert({ id: true, ...parsed.data }, { onConflict: "id" });
 
-  if (error) throw error;
-  return { ok: true };
+  if (error) return fail(error.message);
+  return ok(true);
 }
 
+// --------------------
+// TIERS
+// --------------------
 export async function adminListTiers() {
-  const session = await getSession();
-  requireAdmin(session);
-
+  await adminGuard();
   const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("tiers")
     .select("*")
-    .order("sort_order", { ascending: true });
+    .order("sort_order", { ascending: true })
+    .order("min_points", { ascending: true });
 
-  if (error) throw error;
-  return data ?? [];
+  if (error) return fail(error.message);
+  return ok(data ?? []);
 }
-
-const tierSchema = z.object({
-  id: z.string().uuid().optional(),
-  slug: z.string().min(2).max(40),
-  name: z.string().min(2).max(40),
-  min_points: z.number().int().min(0).max(100000),
-  badge_text: z.string().max(120),
-  badge_bg: z.string().max(30),
-  badge_fg: z.string().max(30),
-  dot_color: z.string().max(30),
-  sort_order: z.number().int().min(0).max(999),
-  is_active: z.boolean(),
-});
 
 export async function adminUpsertTier(input: unknown) {
-  const session = await getSession();
-  requireAdmin(session);
+  await adminGuard();
+  const parsed = TierSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.message);
 
-  const parsed = tierSchema.parse(input);
+  const p = parsed.data;
+  const payload = {
+    id: p.id,
+    slug: p.slug,
+    name: p.name,
+    min_points: p.min_points,
+    badge_text: [p.badge_label, p.badge_message].filter(Boolean).join(" · ") || "",
+    badge_bg: "#000000",
+    badge_fg: "#ffffff",
+    dot_color: p.dot_color ?? "#22c55e",
+    sort_order: p.sort_order,
+    is_active: p.is_active,
+  };
+
   const supabase = supabaseAdmin();
+  const { error } = await supabase.from("tiers").upsert(payload, { onConflict: "id" });
 
-  const { error } = await supabase.from("tiers").upsert(parsed);
-  if (error) throw error;
-  return { ok: true };
+  if (error) return fail(error.message);
+  return ok(true);
 }
 
+// --------------------
+// REWARDS
+// --------------------
 export async function adminListRewards() {
-  const session = await getSession();
-  requireAdmin(session);
-
+  await adminGuard();
   const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("rewards")
-    .select("id,title,description,cost_points,is_global,cafe_id,is_active,created_at")
-    .order("created_at", { ascending: false });
+    .select("*")
+    .order("is_active", { ascending: false })
+    .order("cost_points", { ascending: true });
 
-  if (error) throw error;
-  return data ?? [];
+  if (error) return fail(error.message);
+  return ok(data ?? []);
 }
 
-const rewardSchema = z.object({
-  id: z.string().uuid().optional(),
-  title: z.string().min(2).max(60),
-  description: z.string().max(200).optional(),
-  cost_points: z.number().int().min(1).max(100000),
-  is_global: z.boolean(),
-  cafe_id: z.string().uuid().nullable().optional(),
-  is_active: z.boolean(),
-});
-
 export async function adminUpsertReward(input: unknown) {
-  const session = await getSession();
-  requireAdmin(session);
+  await adminGuard();
+  const parsed = RewardSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.message);
 
-  const parsed = rewardSchema.parse(input);
+  const payload = {
+    ...parsed.data,
+    description: parsed.data.description ?? "",
+    cafe_id: parsed.data.is_global ? null : parsed.data.cafe_id ?? null,
+  };
+
   const supabase = supabaseAdmin();
+  const { error } = await supabase.from("rewards").upsert(payload, { onConflict: "id" });
 
-  const { error } = await supabase.from("rewards").upsert({
-    ...parsed,
-    description: parsed.description ?? "",
-    cafe_id: parsed.is_global ? null : (parsed.cafe_id ?? null),
-  });
+  if (error) return fail(error.message);
+  return ok(true);
+}
 
-  if (error) throw error;
-  return { ok: true };
+// --------------------
+// SOCIOS / PROFILES
+// --------------------
+export async function adminListProfiles() {
+  await adminGuard();
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,full_name,cedula,role,phone,is_active,tier_id,cafe_id,created_at")
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (error) return fail(error.message);
+  return ok(data ?? []);
+}
+
+export async function adminSetProfileActive(input: unknown) {
+  await adminGuard();
+  const parsed = ProfileActiveSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.message);
+
+  const { profile_id, is_active } = parsed.data;
+  const supabase = supabaseAdmin();
+  const { error } = await supabase.from("profiles").update({ is_active }).eq("id", profile_id);
+
+  if (error) return fail(error.message);
+  return ok(true);
+}
+
+export async function adminSetProfileTier(input: unknown) {
+  await adminGuard();
+  const parsed = ProfileTierSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.message);
+
+  const { profile_id, tier_id } = parsed.data;
+  const supabase = supabaseAdmin();
+  const { error } = await supabase.from("profiles").update({ tier_id }).eq("id", profile_id);
+
+  if (error) return fail(error.message);
+  return ok(true);
+}
+
+export async function adminResetPinByCedula(input: unknown) {
+  await adminGuard();
+  const parsed = ProfilePinSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.message);
+
+  const { cedula, pin } = parsed.data;
+  const pin_hash = await bcrypt.hash(pin, 10);
+
+  const supabase = supabaseAdmin();
+  const { error } = await supabase.from("profiles").update({ pin_hash }).eq("cedula", cedula);
+
+  if (error) return fail(error.message);
+  return ok(true);
+}
+
+// --------------------
+// CAFETERIAS
+// --------------------
+export async function adminListCafes() {
+  await adminGuard();
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase
+    .from("cafes")
+    .select("id,name,is_active,created_at")
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (error) return fail(error.message);
+  return ok(data ?? []);
+}
+
+export async function adminSetCafeActive(input: unknown) {
+  await adminGuard();
+  const parsed = CafeActiveSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.message);
+
+  const { cafe_id, is_active } = parsed.data;
+  const supabase = supabaseAdmin();
+  const { error } = await supabase.from("cafes").update({ is_active }).eq("id", cafe_id);
+
+  if (error) return fail(error.message);
+  return ok(true);
 }

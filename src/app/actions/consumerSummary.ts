@@ -81,7 +81,7 @@ export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null
   const last10 = typed.slice(0, 10);
 
   const cafeIds = [...new Set(typed.map((t) => t.cafe_id).filter(Boolean))] as string[];
-  let cafesMap: Record<string, string> = {};
+  const cafesMap: Record<string, string> = {};
   if (cafeIds.length > 0) {
     const { data: cafes } = await supabase
       .from("cafes")

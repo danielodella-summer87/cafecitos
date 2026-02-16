@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { loginUser } from "@/app/actions/auth";
@@ -42,10 +43,13 @@ export default function LoginPage() {
         <div className={`${PRO.card} pb-8`}>
           {/* LOGO (ancho similar al título) */}
           <div className="mx-auto mb-4 w-[260px] md:w-[320px]">
-            <img
+            <Image
               src="/logoamorperfecto.png"
               alt="Amor Perfecto"
+              width={320}
+              height={160}
               className="w-full h-auto object-contain"
+              priority
             />
           </div>
 

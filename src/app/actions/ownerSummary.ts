@@ -31,7 +31,7 @@ function normalizeInput(input: unknown): { cedula: string } {
   }
 
   // Si viene como objeto { cedula }
-  if (input && typeof input === "object" && "cedula" in (input as any)) {
+  if (input && typeof input === "object" && "cedula" in (input as Record<string, unknown>)) {
     const o = input as { cedula?: unknown };
     return { cedula: normalizeCedula(o.cedula) };
   }

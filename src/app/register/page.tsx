@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { registerUser } from "@/app/actions/auth";
@@ -14,9 +15,11 @@ export default function RegisterPage() {
     <main className="min-h-screen bg-white flex items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white shadow-sm p-6">
         <div className="flex flex-col items-center text-center gap-3">
-          <img
+          <Image
             src="/logoamorperfecto.png"
             alt="Amor Perfecto"
+            width={160}
+            height={80}
             className="h-20 w-auto"
           />
           <h1 className="text-2xl font-semibold text-neutral-900">Registrarme</h1>

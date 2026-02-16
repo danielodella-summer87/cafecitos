@@ -8,15 +8,21 @@ import { ownerGetConsumerSummary } from "@/app/actions/ownerSummary";
 import { getTxMeta } from "@/lib/ui/txLabels";
 import { PRO } from "@/lib/ui/pro";
 
+type Json = Record<string, unknown>;
+
+type LookupState = {
+  profile?: { full_name?: string | null; cedula?: string; role?: string } | null;
+  balance?: number;
+  earnedInThisCafe?: number;
+  redeemedInThisCafe?: number;
+  availableInThisCafe?: number;
+  last?: Array<{ id?: string; tx_type?: string; note?: string | null; amount?: number }>;
+};
+
 type Props = {
   me: { full_name: string | null; cedula: string };
   myCafe: { name: string } | null;
 };
-
-function formatDate(d?: string | null) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("es-UY");
-}
 
 function CafecitosLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -37,8 +43,8 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
   const [note, setNote] = useState("");
   const [redeemAmount, setRedeemAmount] = useState<number>(1);
   const [redeemNote, setRedeemNote] = useState("");
-  const [lookup, setLookup] = useState<any>(null);
-  const [lastSummary, setLastSummary] = useState<any>(null);
+  const [lookup, setLookup] = useState<LookupState | null>(null);
+  const [lastSummary, setLastSummary] = useState<Json | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loadingLookup, setLoadingLookup] = useState(false);
   const [loadingAssign, setLoadingAssign] = useState(false);
@@ -103,17 +109,17 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
       setLastSummary(res);
 
       setLookup({
-        profile: res.profile,
+        profile: res.profile ?? null,
         balance: res.balance ?? 0,
         earnedInThisCafe: res.earnedInThisCafe ?? 0,
         redeemedInThisCafe: res.redeemedInThisCafe ?? 0,
         availableInThisCafe: res.availableInThisCafe ?? 0,
-        last: res.last ?? [],
+        last: (res.last ?? []) as LookupState["last"],
       });
 
       if (res?.error) setStatus(res.error);
-    } catch (e: any) {
-      setStatus(e?.message ?? "Error buscando cliente");
+    } catch (e: unknown) {
+      setStatus(e instanceof Error ? e.message : "Error buscando cliente");
     } finally {
       setLoadingLookup(false);
     }
@@ -131,8 +137,8 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
       });
       setStatus("✅ Cafecitos asignados");
       await onLookup();
-    } catch (e: any) {
-      setStatus(e?.message ?? "Error asignando cafecitos");
+    } catch (e: unknown) {
+      setStatus(e instanceof Error ? e.message : "Error asignando cafecitos");
     } finally {
       setLoadingAssign(false);
     }
@@ -163,8 +169,8 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
       } else {
         setStatus(result.error);
       }
-    } catch (e: any) {
-      setStatus(e?.message ?? "Error canjeando cafecitos");
+    } catch (e: unknown) {
+      setStatus(e instanceof Error ? e.message : "Error canjeando cafecitos");
     } finally {
       setLoadingRedeem(false);
     }
@@ -223,12 +229,20 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
               }
 
               const res = await ownerGetConsumerSummary({ cedula: clean });
-              setLookup(res as any);
+              const r = res as Json;
+              setLookup({
+                profile: r.profile as LookupState["profile"],
+                balance: r.balance as number | undefined,
+                earnedInThisCafe: r.earnedInThisCafe as number | undefined,
+                redeemedInThisCafe: r.redeemedInThisCafe as number | undefined,
+                availableInThisCafe: r.availableInThisCafe as number | undefined,
+                last: r.last as LookupState["last"],
+              });
 
-              if ((res as any)?.error) setStatus((res as any).error);
+              if (r?.error) setStatus(String(r.error));
               else setStatus("✅ Cliente cargado");
-            } catch (e: any) {
-              setStatus(e?.message ?? "Error buscando cliente");
+            } catch (e: unknown) {
+              setStatus(e instanceof Error ? e.message : "Error buscando cliente");
             } finally {
               setLoadingLookup(false);
             }
@@ -328,8 +342,8 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
                 <div className="px-4 pb-4">
                   {(lookup?.last ?? []).length ? (
                     <div className="space-y-2 mt-2">
-                      {(lookup?.last ?? []).map((t: any) => {
-                        const meta = getTxMeta(t.tx_type);
+                      {(lookup?.last ?? []).map((t: { id?: string; tx_type?: string; note?: string | null; amount?: number }) => {
+                        const meta = getTxMeta((t.tx_type ?? "earn") as Parameters<typeof getTxMeta>[0]);
                         const isMinus = t.tx_type === "redeem" || t.tx_type === "transfer_out";
 
                         return (
@@ -353,7 +367,7 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
                                   : "text-green-600 font-semibold"
                               }
                             >
-                              {isMinus ? "-" : "+"}{t.amount}
+                              {isMinus ? "-" : "+"}{t.amount ?? 0}
                             </div>
                           </div>
                         );

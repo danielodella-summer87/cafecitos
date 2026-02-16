@@ -12,7 +12,6 @@ export async function ownerLookupConsumer(input: unknown) {
   const { cedula } = schema.parse(input);
 
   const session = await getSession();
-  const profileId = session?.profileId;
   if (!session) throw new Error("No autenticado");
   if (session.role !== "owner") throw new Error("Solo un owner puede buscar consumidores");
 

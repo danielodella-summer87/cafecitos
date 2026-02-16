@@ -17,14 +17,13 @@ export default function Home() {
         return;
       }
 
-      // Si el error es porque no existe la tabla, igual estamos conectados.
-      if ((error as any)?.message?.includes("relation") || (error as any)?.code === "42P01") {
+      const err = error as { message?: string; code?: string };
+      if (err?.message?.includes("relation") || err?.code === "42P01") {
         setStatus("Conectado a Supabase ✅ (tabla healthcheck aún no existe)");
         return;
       }
 
-      // Otro error: lo mostramos.
-      setStatus(`Error conectando con Supabase ❌: ${(error as any)?.message ?? "desconocido"}`);
+      setStatus(`Error conectando con Supabase ❌: ${err?.message ?? "desconocido"}`);
     })();
   }, []);
 
