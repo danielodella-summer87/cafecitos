@@ -1,79 +1,88 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { markWelcomeSeen } from "@/app/actions/onboarding";
 
 export default function BienvenidaClient() {
   const router = useRouter();
+  const [status, setStatus] = useState<"saving" | "ready">("saving");
 
   useEffect(() => {
-    let mounted = true;
+    let cancelled = false;
 
-    const run = async () => {
+    const t = setTimeout(() => {
+      if (cancelled) return;
+      setStatus("ready");
+    }, 2500);
+
+    (async () => {
       try {
         await markWelcomeSeen();
-      } catch (err) {
-        console.warn("markWelcomeSeen fallo (no bloqueante):", err);
+      } catch (_) {
+        // ignore
       } finally {
-        if (!mounted) return;
-        setTimeout(() => {
-          router.replace("/app/consumer");
-        }, 1200);
+        if (cancelled) return;
+        clearTimeout(t);
+        setStatus("ready");
       }
-    };
-
-    run();
+    })();
 
     return () => {
-      mounted = false;
+      cancelled = true;
+      clearTimeout(t);
     };
   }, []);
 
+  const continuar = () => {
+    router.replace("/app");
+  };
+
   return (
-    <main style={{ maxWidth: 880, margin: "40px auto", padding: 20 }}>
-      <h1 style={{ fontSize: 32, fontWeight: 900, marginBottom: 8 }}>
-        👋 Bienvenido a Cafecitos
-      </h1>
-      <p style={{ opacity: 0.75, marginBottom: 24 }}>
-        Te contamos en 30 segundos cómo funciona.
-      </p>
+    <div className="mx-auto max-w-xl px-5 py-10">
+      <h1 className="text-3xl font-semibold tracking-tight">👋 Bienvenido a Cafecitos</h1>
+      <p className="mt-2 text-neutral-600">Te contamos en 30 segundos cómo funciona.</p>
 
-      <div style={{ border: "1px solid #e5e7eb", borderRadius: 16, padding: 18, marginBottom: 18 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>✅ Cómo ganás cafecitos</h2>
-        <p style={{ marginTop: 8, opacity: 0.8 }}>
-          Cada vez que consumís en una cafetería adherida, te acreditan cafecitos.
-        </p>
+      <div className="mt-8 space-y-4">
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="font-semibold">✅ Cómo ganás cafecitos</div>
+          <div className="mt-1 text-neutral-700">
+            Cada vez que consumís en una cafetería adherida, te acreditan cafecitos.
+          </div>
+        </div>
+
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="font-semibold">☕ Cómo canjeás</div>
+          <div className="mt-1 text-neutral-700">
+            Cuando llegás al mínimo requerido, podés canjear por un café (o beneficio disponible).
+          </div>
+        </div>
+
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="font-semibold">⭐ Niveles</div>
+          <div className="mt-1 text-neutral-700">
+            A medida que acumulás cafecitos, subís de nivel y desbloqueás mejores beneficios.
+          </div>
+        </div>
       </div>
 
-      <div style={{ border: "1px solid #e5e7eb", borderRadius: 16, padding: 18, marginBottom: 18 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>☕ Cómo canjeás</h2>
-        <p style={{ marginTop: 8, opacity: 0.8 }}>
-          Cuando llegás al mínimo requerido, podés canjear por un café (o beneficio disponible).
-        </p>
+      <div className="mt-8">
+        {status === "saving" ? (
+          <button
+            className="rounded-xl bg-neutral-700 px-5 py-3 font-semibold text-white opacity-80"
+            disabled
+          >
+            Guardando...
+          </button>
+        ) : (
+          <button
+            className="rounded-xl bg-black px-5 py-3 font-semibold text-white"
+            onClick={continuar}
+          >
+            Continuar
+          </button>
+        )}
       </div>
-
-      <div style={{ border: "1px solid #e5e7eb", borderRadius: 16, padding: 18, marginBottom: 24 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>⭐ Niveles</h2>
-        <p style={{ marginTop: 8, opacity: 0.8 }}>
-          A medida que acumulás cafecitos, subís de nivel y desbloqueás mejores beneficios.
-        </p>
-      </div>
-
-      <button
-        onClick={() => router.replace("/app/consumer")}
-        style={{
-          background: "#111",
-          color: "#fff",
-          border: "none",
-          borderRadius: 12,
-          padding: "12px 16px",
-          fontWeight: 800,
-          cursor: "pointer",
-        }}
-      >
-        Entendido, ir a mi cuenta →
-      </button>
-    </main>
+    </div>
   );
 }
