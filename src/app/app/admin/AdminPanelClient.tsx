@@ -48,7 +48,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export default function AdminPanelClient(props: Props) {
   const [tab, setTab] = useState<Tab>("config");
   const [toast, setToast] = useState<string | null>(null);
-  const toastRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const toastRef = useRef<any>(null);
 
   const [settings, setSettings] = useState<AdminSettings>(
     props.initialSettings ?? {
@@ -74,8 +74,8 @@ export default function AdminPanelClient(props: Props) {
 
   function notify(msg: string) {
     setToast(msg);
-    if (toastRef.current) window.clearTimeout(toastRef.current);
-    toastRef.current = window.setTimeout(() => setToast(null), 2500);
+    if (toastRef.current) clearTimeout(toastRef.current);
+    toastRef.current = setTimeout(() => setToast(null), 2500);
   }
 
   return (
