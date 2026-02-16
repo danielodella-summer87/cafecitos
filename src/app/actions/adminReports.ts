@@ -84,6 +84,7 @@ export type TopClienteGlobalRow = {
 export type PanelClienteGlobalRow = {
   cliente_id: string;
   cliente: string;
+  cafe_preferida_id: string | null;
   cafeteria_preferida: string;
   movimientos: number;
   generado: number;
@@ -741,7 +742,7 @@ export async function getAdminPanelClientesGlobal(): Promise<PanelClienteGlobalR
   const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("v_panel_clientes_global")
-    .select("cliente_id, cliente, cafeteria_preferida, movimientos, generado, canjeado, neto")
+    .select("cliente_id, cliente, cafe_preferida_id, cafeteria_preferida, movimientos, generado, canjeado, neto")
     .order("neto", { ascending: false })
     .order("movimientos", { ascending: false });
 

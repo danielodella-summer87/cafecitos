@@ -48,6 +48,7 @@ cafeteria_preferida_pick as (
 select
   p.id as cliente_id,
   coalesce(p.full_name, 'Cliente ' || p.cedula, p.cedula) as cliente,
+  cpp.cafe_id as cafe_preferida_id,
   coalesce(c.name, '—') as cafeteria_preferida,
   ct.movimientos,
   ct.generado,

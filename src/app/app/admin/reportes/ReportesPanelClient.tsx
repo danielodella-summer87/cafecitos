@@ -112,7 +112,18 @@ export default function ReportesPanelClient({
                         {r.cliente}
                       </Link>
                     </td>
-                    <td className="p-3 text-gray-600">{r.cafeteria_preferida}</td>
+                    <td className="p-3 text-gray-600">
+                      {r.cafe_preferida_id ? (
+                        <Link
+                          href={`/app/admin/cafes/${r.cafe_preferida_id}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {r.cafeteria_preferida}
+                        </Link>
+                      ) : (
+                        r.cafeteria_preferida
+                      )}
+                    </td>
                     <td className="p-3">{fmtInt(r.movimientos)}</td>
                     <td className="p-3 text-green-600">{fmtInt(r.generado)}</td>
                     <td className="p-3 text-red-500">{fmtInt(r.canjeado)}</td>
