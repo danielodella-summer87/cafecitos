@@ -59,6 +59,12 @@ const CafeActiveSchema = z.object({
   is_active: z.coerce.boolean(),
 });
 
+const CafeUpsertSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().min(2).max(60),
+  is_active: z.coerce.boolean().default(true),
+});
+
 // --------------------
 // Helpers
 // --------------------
@@ -198,7 +204,7 @@ export async function adminListProfiles() {
   const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id,full_name,cedula,role,phone,is_active,tier_id,cafe_id,created_at")
+    .select("id, full_name, role, cedula, is_active, cafe_id, created_at")
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -206,17 +212,33 @@ export async function adminListProfiles() {
   return ok(data ?? []);
 }
 
-export async function adminSetProfileActive(input: unknown) {
+export async function adminUpdateProfileActive(input: unknown) {
   await adminGuard();
-  const parsed = ProfileActiveSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.message);
 
-  const { profile_id, is_active } = parsed.data;
+  const parsed = ProfileActiveSchema.parse(input);
   const supabase = supabaseAdmin();
-  const { error } = await supabase.from("profiles").update({ is_active }).eq("id", profile_id);
 
-  if (error) return fail(error.message);
-  return ok(true);
+  const { data: prof, error: e1 } = await supabase
+    .from("profiles")
+    .select("id, role, is_active")
+    .eq("id", parsed.profile_id)
+    .maybeSingle();
+
+  if (e1) throw e1;
+  if (!prof) return { ok: false as const, error: "Perfil no encontrado" };
+
+  if ((prof as { role?: string }).role === "admin" && parsed.is_active === false) {
+    return { ok: false as const, error: "El usuario admin no se puede desactivar." };
+  }
+
+  const { error: e2 } = await supabase
+    .from("profiles")
+    .update({ is_active: parsed.is_active })
+    .eq("id", parsed.profile_id);
+
+  if (e2) throw e2;
+
+  return { ok: true as const };
 }
 
 export async function adminSetProfileTier(input: unknown) {
@@ -274,4 +296,37 @@ export async function adminSetCafeActive(input: unknown) {
 
   if (error) return fail(error.message);
   return ok(true);
+}
+
+export async function adminUpsertCafe(input: unknown) {
+  await adminGuard();
+
+  const parsed = CafeUpsertSchema.parse(input);
+  const supabase = supabaseAdmin();
+
+  const payload: { name: string; is_active: boolean } = {
+    name: parsed.name,
+    is_active: parsed.is_active,
+  };
+
+  if (parsed.id) {
+    const { data, error } = await supabase
+      .from("cafes")
+      .update(payload)
+      .eq("id", parsed.id)
+      .select("id")
+      .single();
+
+    if (error) throw error;
+    return { ok: true as const, data };
+  }
+
+  const { data, error } = await supabase
+    .from("cafes")
+    .insert(payload)
+    .select("id")
+    .single();
+
+  if (error) throw error;
+  return { ok: true as const, data };
 }

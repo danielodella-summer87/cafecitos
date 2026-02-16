@@ -1,16 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   adminUpdateSettings,
   adminUpsertTier,
   adminUpsertReward,
-  adminSetProfileActive,
+  adminUpdateProfileActive,
   adminSetProfileTier,
   adminResetPinByCedula,
   adminSetCafeActive,
+  adminUpsertCafe,
 } from "@/app/actions/adminPro";
 
 type Settings = {
@@ -49,9 +50,9 @@ type ProfileRow = {
   full_name: string | null;
   cedula: string | null;
   role: "consumer" | "owner" | "admin" | string;
-  phone: string | null;
+  phone?: string | null;
   is_active: boolean | null;
-  tier_id: string | null;
+  tier_id?: string | null;
   cafe_id: string | null;
   created_at: string | null;
 };
@@ -83,6 +84,13 @@ export default function AdminPanelClient(props: {
   const [tab, setTab] = useState<"config" | "tiers" | "rewards" | "socios" | "cafes">("config");
   const [pending, startTransition] = useTransition();
   const [toast, setToast] = useState<string | null>(null);
+  const [newCafeName, setNewCafeName] = useState("");
+  const [newCafeLoading, setNewCafeLoading] = useState(false);
+  const [localCafes, setLocalCafes] = useState<CafeRow[]>(() => props.initialCafes ?? []);
+
+  useEffect(() => {
+    setLocalCafes(props.initialCafes ?? []);
+  }, [props.initialCafes]);
 
   const settings = props.initialSettings ?? {
     welcome_bonus_points: 5,
@@ -95,7 +103,7 @@ export default function AdminPanelClient(props: {
   const tiers = props.initialTiers ?? [];
   const rewards = props.initialRewards ?? [];
   const profiles = props.initialProfiles ?? [];
-  const cafes = props.initialCafes ?? [];
+  const cafes = localCafes;
 
   const tierOptions = useMemo(() => {
     const list = props.initialTiers ?? [];
@@ -223,7 +231,7 @@ export default function AdminPanelClient(props: {
               profiles={profiles}
               tiers={tierOptions}
               disabled={pending}
-              onSetActive={(profile_id, is_active) => run(() => adminSetProfileActive({ profile_id, is_active }), "Estado actualizado")}
+              onSetActive={(profile_id, is_active) => run(() => adminUpdateProfileActive({ profile_id, is_active }), "Estado actualizado")}
               onSetTier={(profile_id, tier_id) => run(() => adminSetProfileTier({ profile_id, tier_id: tier_id || null }), "Nivel actualizado")}
               onResetPin={(cedula, pin) => run(() => adminResetPinByCedula({ cedula, pin }), "PIN actualizado")}
             />
@@ -235,6 +243,48 @@ export default function AdminPanelClient(props: {
             {props.serverErrors.cafes && (
               <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{props.serverErrors.cafes}</div>
             )}
+
+            <div className="rounded-xl border p-4 mb-4 bg-white">
+              <div className="font-semibold mb-2">Agregar cafetería</div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                <div className="md:col-span-2">
+                  <label className="text-sm block mb-1">Nombre</label>
+                  <input
+                    value={newCafeName}
+                    onChange={(e) => setNewCafeName(e.target.value)}
+                    className="w-full rounded-lg border px-3 py-2"
+                    placeholder="Ej: Amor Perfecto — Centro"
+                    maxLength={60}
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={newCafeLoading || newCafeName.trim().length < 3}
+                  className="rounded-lg px-4 py-2 bg-black text-white disabled:opacity-60"
+                  onClick={async () => {
+                    const name = newCafeName.trim();
+                    if (name.length < 3) return;
+                    setNewCafeLoading(true);
+                    try {
+                      const res = await adminUpsertCafe({ name, is_active: true });
+                      if (!res.ok) {
+                        notify((res as { error?: string }).error ?? "No se pudo crear");
+                        return;
+                      }
+                      const data = res.data as { id?: string } | undefined;
+                      setLocalCafes((prev) => [{ id: data?.id ?? "", name, is_active: true, created_at: null }, ...prev]);
+                      setNewCafeName("");
+                      notify("✅ Cafetería creada");
+                    } finally {
+                      setNewCafeLoading(false);
+                    }
+                  }}
+                >
+                  {newCafeLoading ? "Creando..." : "Crear"}
+                </button>
+              </div>
+            </div>
+
             <CafesPanel
               cafes={cafes}
               disabled={pending}
