@@ -750,3 +750,46 @@ export async function getAdminPanelClientesGlobal(): Promise<PanelClienteGlobalR
   const rows = (data ?? []) as PanelClienteGlobalRow[];
   return rows;
 }
+
+// Niveles: tiers de clientes y de cafeterías (para /app/admin/niveles, evita prerender crash)
+export type TierRow = {
+  id: string;
+  slug: string;
+  name: string;
+  min_points: number;
+  badge_label: string | null;
+  badge_message: string | null;
+  dot_color: string | null;
+  sort_order: number;
+  is_active: boolean;
+};
+
+export type CafeTierRowNiveles = {
+  id: string;
+  name: string;
+  min_total_points: number;
+  badge_color: string | null;
+  created_at: string | null;
+};
+
+export async function getClientTiers(): Promise<TierRow[]> {
+  await adminGuard();
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase
+    .from("tiers")
+    .select("id,slug,name,min_points,badge_label,badge_message,dot_color,sort_order,is_active")
+    .order("sort_order", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as TierRow[];
+}
+
+export async function getCafeTiers(): Promise<CafeTierRowNiveles[]> {
+  await adminGuard();
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase
+    .from("cafe_tiers")
+    .select("id,name,min_total_points,badge_color,created_at")
+    .order("min_total_points", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CafeTierRowNiveles[];
+}
