@@ -43,7 +43,17 @@ export default async function AdminPage() {
       initialTiers={tiersRes.ok ? tiersRes.tiers : []}
       initialRewards={rewardsRes.ok ? rewardsRes.rewards : []}
       initialProfiles={profilesRes.ok ? profilesRes.profiles : []}
-      initialCafes={cafesRes.ok ? cafesRes.cafes : []}
+      initialCafes={
+  cafesRes.ok
+    ? (cafesRes.cafes ?? [])
+        .filter((c: any) => c?.id)
+        .map((c: any) => ({
+          id: String(c.id),
+          name: c.name,
+          is_active: c.is_active,
+        }))
+    : []
+}
       serverErrors={serverErrors}
     />
   );
