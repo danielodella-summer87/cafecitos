@@ -1,23 +1,23 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 export default function WelcomeGuard({
-  welcomeSeenAt,
+  shouldShowWelcome,
   children,
 }: {
-  welcomeSeenAt: string | null;
+  shouldShowWelcome: boolean;
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (welcomeSeenAt !== null) return;
     if (pathname === "/app/bienvenida") return;
+    if (!shouldShowWelcome) return;
     router.replace("/app/bienvenida");
-  }, [welcomeSeenAt, pathname, router]);
+  }, [pathname, router, shouldShowWelcome]);
 
   return <>{children}</>;
 }

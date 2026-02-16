@@ -1,3 +1,6 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import AdminPanelClient from "./AdminPanelClient";

@@ -1,20 +1,34 @@
 "use client";
 
-import { useTransition } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { markWelcomeSeen } from "@/app/actions/onboarding";
 
 export default function BienvenidaClient() {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
 
-  function onContinue() {
-    startTransition(async () => {
-      await markWelcomeSeen();
-      router.push("/app");
-      router.refresh();
-    });
-  }
+  useEffect(() => {
+    let mounted = true;
+
+    const run = async () => {
+      try {
+        await markWelcomeSeen();
+      } catch (err) {
+        console.warn("markWelcomeSeen fallo (no bloqueante):", err);
+      } finally {
+        if (!mounted) return;
+        setTimeout(() => {
+          router.replace("/app/consumer");
+        }, 1200);
+      }
+    };
+
+    run();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <main style={{ maxWidth: 880, margin: "40px auto", padding: 20 }}>
@@ -47,8 +61,7 @@ export default function BienvenidaClient() {
       </div>
 
       <button
-        onClick={onContinue}
-        disabled={pending}
+        onClick={() => router.replace("/app/consumer")}
         style={{
           background: "#111",
           color: "#fff",
@@ -56,11 +69,10 @@ export default function BienvenidaClient() {
           borderRadius: 12,
           padding: "12px 16px",
           fontWeight: 800,
-          cursor: pending ? "not-allowed" : "pointer",
-          opacity: pending ? 0.7 : 1,
+          cursor: "pointer",
         }}
       >
-        {pending ? "Guardando..." : "Entendido, ir a mi cuenta →"}
+        Entendido, ir a mi cuenta →
       </button>
     </main>
   );

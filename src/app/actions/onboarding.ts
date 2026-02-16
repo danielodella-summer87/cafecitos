@@ -3,9 +3,9 @@
 import { getSession } from "@/lib/auth/session";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-export async function markWelcomeSeen() {
+export async function markWelcomeSeen(): Promise<boolean> {
   const session = await getSession();
-  if (!session) throw new Error("No autenticado");
+  if (!session) return false;
 
   const supabase = supabaseAdmin();
   const { error } = await supabase
@@ -15,16 +15,11 @@ export async function markWelcomeSeen() {
 
   if (error) {
     const msg = (error as any)?.message ?? "";
-    // Evita romper en prod si PostgREST aún no refrescó o la columna no existe momentáneamente
-    if (
-      msg.includes("schema cache") ||
-      msg.includes("welcome_seen_at") ||
-      msg.includes("column") ||
-      msg.includes("does not exist")
-    ) {
-      return true;
+    if (msg.includes("welcome_seen_at") || msg.includes("schema cache")) {
+      return false;
     }
-    throw new Error(msg);
+    console.error("[markWelcomeSeen]", msg);
+    return false;
   }
 
   return true;
