@@ -147,6 +147,15 @@ export async function registerUser(input: FormData | { cedula: string; pin: stri
     if (txErr) return { ok: false, error: `Usuario creado, pero no se pudo aplicar la cortesía: ${txErr.message}` };
   }
 
+  // Loguear al usuario y redirigir a bienvenida (onboarding)
+  const token = signSessionToken({
+    profileId: profileInserted.id,
+    role: "consumer",
+    cafeId: null,
+    fullName: safeName || "Cliente",
+  });
+  await setSessionCookie(token);
+
   return { ok: true };
 }
 

@@ -8,11 +8,7 @@ export default function RegisterPage() {
     "use server";
     const res = await registerUser(formData);
     if (res.ok) {
-      const fullName = (formData.get("full_name") as string) ?? "";
-      const cedula = String((formData.get("cedula") as string) ?? "").trim().replace(/\D/g, "");
-      const n = fullName.trim().slice(0, 20);
-      const q = `?cedula=${encodeURIComponent(cedula)}${n ? `&name=${encodeURIComponent(n)}` : ""}`;
-      redirect(`/register/welcome${q}`);
+      redirect("/app/bienvenida");
       return;
     }
     redirect(`/register?error=${encodeURIComponent(res.error ?? "Error al registrar")}`);
