@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { getSession } from "@/lib/auth/session";
 import { redirect, notFound } from "next/navigation";
@@ -32,6 +31,8 @@ export default async function GuideDetailPage({ params }: Props) {
   const view = views.find((v) => v.guide_id === id);
   const initialProgress = view?.progress_pct ?? 0;
 
+  const slug = (guide as { slug?: string }).slug;
+
   return (
     <main className={PRO.page}>
       <div className="mx-auto max-w-2xl px-4 py-6">
@@ -43,32 +44,17 @@ export default async function GuideDetailPage({ params }: Props) {
         </Link>
 
         <article className="rounded-2xl border border-neutral-200 bg-white overflow-hidden">
-          {guide.cover_url && (
-            <div className="relative aspect-[16/9] w-full bg-neutral-200">
-              <Image
-                src={guide.cover_url}
-                alt=""
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 672px"
-                priority
-              />
-            </div>
-          )}
           <div className="p-6">
-            <h1 className="text-xl font-bold text-neutral-900">{guide.title}</h1>
-            <p className="mt-1 text-sm text-neutral-500">{guide.reading_minutes} min de lectura</p>
-            {guide.excerpt && (
-              <p className="mt-3 text-neutral-600">{guide.excerpt}</p>
-            )}
-            <div className="mt-6">
-              <GuideContent
-                guideId={guide.id}
-                profileId={session.profileId}
-                contentJson={guide.content_json}
-                initialProgress={initialProgress}
-              />
-            </div>
+            <GuideContent
+              title={guide.title}
+              excerpt={guide.excerpt}
+              coverUrl={guide.cover_url}
+              slug={slug ?? ""}
+              contentJson={guide.content_json}
+              guideId={guide.id}
+              profileId={session.profileId}
+              initialProgress={initialProgress}
+            />
           </div>
         </article>
       </div>

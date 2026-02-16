@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { CoffeeGuide } from "@/app/actions/coffeeGuides";
+import { getGuideCover, GENERIC_COVER } from "@/lib/universoCafeCovers";
 import UnlockModal from "./UnlockModal";
 
 type Props = {
@@ -11,39 +12,6 @@ type Props = {
   progressPct?: number;
   missingPoints?: number;
 };
-
-function normalizeCoverUrl(input?: string | null): string | null {
-  if (!input) return null;
-  const v = input.trim();
-  if (!v) return null;
-  if (/^https?:\/\//i.test(v)) return v;
-  if (v.startsWith("/")) return v;
-  if (v.startsWith("universo-cafe/")) return `/${v}`;
-  return `/universo-cafe/${v}`;
-}
-
-const GENERIC_COVER = "/universo-cafe/cover-generic.png";
-
-const COVER_BY_SLUG: Record<string, string> = {
-  "cafe-filtrado-vs-espresso": "/universo-cafe/cafe-filtrado-vs-espresso.png",
-  "prensa-francesa": "/universo-cafe/prensa-francesa.png",
-  "v60-pour-over": "/universo-cafe/v60-pour-over.png",
-  "moka-italiana": "/universo-cafe/moka-italiana.png",
-  "origenes-brasil-colombia-etiopia": "/universo-cafe/origenes-brasil-colombia-etiopia.png",
-  "acidez-vs-amargor": "/universo-cafe/acidez-vs-amargor.png",
-};
-
-/** Deriva clave para COVER_BY_SLUG desde el título (guide no tiene slug en DB). */
-function getCoverSlugFromTitle(title: string): string | undefined {
-  const t = title.toLowerCase();
-  if (t.includes("filtrado") && t.includes("espresso")) return "cafe-filtrado-vs-espresso";
-  if (t.includes("prensa francesa")) return "prensa-francesa";
-  if (t.includes("v60") || t.includes("pour over")) return "v60-pour-over";
-  if (t.includes("moka") || t.includes("cafetera italiana")) return "moka-italiana";
-  if (t.includes("orígenes") && (t.includes("brasil") || t.includes("colombia"))) return "origenes-brasil-colombia-etiopia";
-  if (t.includes("acidez") && t.includes("amargor")) return "acidez-vs-amargor";
-  return undefined;
-}
 
 export default function CoffeeGuideCard({ guide, isLocked, progressPct = 0, missingPoints }: Props) {
   const [showUnlock, setShowUnlock] = useState(false);
@@ -57,11 +25,11 @@ export default function CoffeeGuideCard({ guide, isLocked, progressPct = 0, miss
 
   const href = `/app/universo-cafe/${guide.id}`;
 
-  const coverSlug = (guide as { slug?: string }).slug ?? getCoverSlugFromTitle(guide.title);
-  const coverSrc =
-    normalizeCoverUrl(guide.cover_url) ??
-    (coverSlug ? COVER_BY_SLUG[coverSlug] : undefined) ??
-    GENERIC_COVER;
+  const coverSrc = getGuideCover({
+    cover_url: guide.cover_url,
+    slug: (guide as { slug?: string }).slug,
+    title: guide.title,
+  });
 
   return (
     <>

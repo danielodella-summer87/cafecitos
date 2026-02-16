@@ -234,6 +234,105 @@ export async function adminUpdateCafeActive(input: { cafe_id: string; is_active:
 }
 
 /* ============================================================
+CAFE TIERS (NIVELES CAFETERÍAS)
+============================================================ */
+export type AdminCafeTier = { id: string; name: string; min_total_points: number; badge_color: string | null };
+
+export async function adminRecalcCafeTiers() {
+  await adminGuard();
+  const supabase = supabaseAdmin();
+  const { error } = await supabase.rpc("recalc_cafe_tiers");
+  if (error) return { ok: false as const, error: error.message };
+  return { ok: true as const };
+}
+
+export async function adminListCafeTiers() {
+  await adminGuard();
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase
+    .from("cafe_tiers")
+    .select("id,name,min_total_points,badge_color")
+    .order("min_total_points", { ascending: true });
+  if (error) return { ok: false as const, error: error.message };
+  return { ok: true as const, cafeTiers: (data ?? []) as AdminCafeTier[] };
+}
+
+export type OwnerCafeWithTier = {
+  cafe_id: string;
+  cafe_name: string;
+  cafe_tier_name: string | null;
+  badge_color: string | null;
+  total_points: number;
+};
+
+export async function adminGetOwnerCafesWithTiers(): Promise<{
+  ok: true;
+  data: Array<{ profile_id: string; cafes: OwnerCafeWithTier[] }>;
+}> {
+  await adminGuard();
+  const supabase = supabaseAdmin();
+
+  const { data: profiles, error: e1 } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("role", "owner");
+  if (e1) return { ok: true as const, data: [] };
+  const ownerIds = (profiles ?? []).map((p: { id: string }) => p.id);
+  if (ownerIds.length === 0) return { ok: true as const, data: [] };
+
+  const { data: co, error: e2 } = await supabase
+    .from("cafe_owners")
+    .select("profile_id,cafe_id")
+    .in("profile_id", ownerIds);
+  if (e2) return { ok: true as const, data: [] };
+  const pairs = (co ?? []) as { profile_id: string; cafe_id: string }[];
+  const cafeIds = [...new Set(pairs.map((x) => x.cafe_id))];
+  if (cafeIds.length === 0) return { ok: true as const, data: [] };
+
+  const [cafesRes, tiersRes, totalsRes] = await Promise.all([
+    supabase.from("cafes").select("id,name,cafe_tier_id").in("id", cafeIds),
+    supabase.from("cafe_tiers").select("id,name,badge_color"),
+    supabase.from("v_cafe_points_totals").select("cafe_id,total_points").in("cafe_id", cafeIds),
+  ]);
+
+  const cafesMap = new Map<string, { name: string; cafe_tier_id: string | null }>();
+  for (const c of cafesRes.data ?? []) {
+    const row = c as { id: string; name: string; cafe_tier_id: string | null };
+    cafesMap.set(row.id, { name: row.name, cafe_tier_id: row.cafe_tier_id });
+  }
+  const tiersMap = new Map<string, { name: string; badge_color: string | null }>();
+  for (const t of tiersRes.data ?? []) {
+    const row = t as { id: string; name: string; badge_color: string | null };
+    tiersMap.set(row.id, { name: row.name, badge_color: row.badge_color });
+  }
+  const totalsMap = new Map<string, number>();
+  for (const v of totalsRes.data ?? []) {
+    const row = v as { cafe_id: string; total_points: number };
+    totalsMap.set(row.cafe_id, row.total_points ?? 0);
+  }
+
+  const byProfile = new Map<string, OwnerCafeWithTier[]>();
+  for (const { profile_id, cafe_id } of pairs) {
+    const cafe = cafesMap.get(cafe_id);
+    if (!cafe) continue;
+    const tier = cafe.cafe_tier_id ? tiersMap.get(cafe.cafe_tier_id) : null;
+    const total_points = totalsMap.get(cafe_id) ?? 0;
+    const entry: OwnerCafeWithTier = {
+      cafe_id,
+      cafe_name: cafe.name,
+      cafe_tier_name: tier?.name ?? null,
+      badge_color: tier?.badge_color ?? null,
+      total_points,
+    };
+    if (!byProfile.has(profile_id)) byProfile.set(profile_id, []);
+    byProfile.get(profile_id)!.push(entry);
+  }
+
+  const data = Array.from(byProfile.entries()).map(([profile_id, cafes]) => ({ profile_id, cafes }));
+  return { ok: true as const, data };
+}
+
+/* ============================================================
 PROFILES (SOCIOS)
 ============================================================ */
 const ProfileActiveSchema = z.object({

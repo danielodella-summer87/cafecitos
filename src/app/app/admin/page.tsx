@@ -7,6 +7,8 @@ import {
   adminListRewards,
   adminListProfiles,
   adminListCafes,
+  adminRecalcCafeTiers,
+  adminGetOwnerCafesWithTiers,
 } from "@/app/actions/adminPro";
 
 export default async function AdminPage() {
@@ -14,12 +16,15 @@ export default async function AdminPage() {
   if (!session) redirect("/login");
   if (session.role !== "admin") redirect("/login");
 
-  const [settingsRes, tiersRes, rewardsRes, profilesRes, cafesRes] = await Promise.all([
+  await adminRecalcCafeTiers();
+
+  const [settingsRes, tiersRes, rewardsRes, profilesRes, cafesRes, ownerCafesRes] = await Promise.all([
     adminGetSettings(),
     adminListTiers(),
     adminListRewards(),
     adminListProfiles(),
     adminListCafes(),
+    adminGetOwnerCafesWithTiers(),
   ]);
 
   const serverErrors: string[] = [];
@@ -37,6 +42,13 @@ export default async function AdminPage() {
   if (!profilesRes.ok) serverErrors.push(`Error cargando socios: ${errMsg(profilesRes)}`);
   if (!cafesRes.ok) serverErrors.push(`Error cargando cafeterías: ${errMsg(cafesRes)}`);
 
+  const ownerCafesMap: Record<string, Array<{ cafe_id: string; cafe_name: string; cafe_tier_name: string | null; badge_color: string | null; total_points: number }>> = {};
+  if (ownerCafesRes.ok && ownerCafesRes.data) {
+    for (const { profile_id, cafes } of ownerCafesRes.data) {
+      ownerCafesMap[profile_id] = cafes;
+    }
+  }
+
   return (
     <AdminPanelClient
       initialSettings={settingsRes.ok ? settingsRes.settings : null}
@@ -44,16 +56,17 @@ export default async function AdminPage() {
       initialRewards={rewardsRes.ok ? rewardsRes.rewards : []}
       initialProfiles={profilesRes.ok ? profilesRes.profiles : []}
       initialCafes={
-  cafesRes.ok
-    ? (cafesRes.cafes ?? [])
-        .filter((c: any) => c?.id)
-        .map((c: any) => ({
-          id: String(c.id),
-          name: c.name,
-          is_active: c.is_active,
-        }))
-    : []
-}
+        cafesRes.ok
+          ? (cafesRes.cafes ?? [])
+              .filter((c: any) => c?.id)
+              .map((c: any) => ({
+                id: String(c.id),
+                name: c.name,
+                is_active: c.is_active,
+              }))
+          : []
+      }
+      initialOwnerCafes={ownerCafesMap}
       serverErrors={serverErrors}
     />
   );

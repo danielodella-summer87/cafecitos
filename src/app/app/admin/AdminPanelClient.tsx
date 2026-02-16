@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { PRO } from "@/lib/ui/pro";
 import {
@@ -31,6 +32,7 @@ type Props = {
     created_at: string;
   }>;
   initialCafes: Array<{ id: string; name: string; is_active?: boolean }>;
+  initialOwnerCafes?: Record<string, Array<{ cafe_id: string; cafe_name: string; cafe_tier_name: string | null; badge_color: string | null; total_points: number }>>;
   serverErrors: string[];
 };
 
@@ -92,12 +94,15 @@ export default function AdminPanelClient(props: Props) {
           <h1 className="text-3xl font-semibold">Panel Admin</h1>
         </div>
 
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
           <button className={`px-4 py-2 rounded-md border ${tab === "config" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("config")}>Configuración</button>
           <button className={`px-4 py-2 rounded-md border ${tab === "tiers" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("tiers")}>Niveles</button>
           <button className={`px-4 py-2 rounded-md border ${tab === "rewards" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("rewards")}>Beneficios</button>
           <button className={`px-4 py-2 rounded-md border ${tab === "profiles" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("profiles")}>Socios</button>
           <button className={`px-4 py-2 rounded-md border ${tab === "cafes" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("cafes")}>Cafeterías</button>
+          <Link href="/app/admin/reportes" className="px-4 py-2 rounded-md border bg-white hover:bg-neutral-50 text-neutral-700">
+            Reportes
+          </Link>
         </div>
 
         {props.serverErrors?.length ? (
@@ -439,23 +444,55 @@ export default function AdminPanelClient(props: Props) {
                 <tbody>
                   {profiles.map((p) => (
                     <tr key={p.id} className="border-t">
-                      <td className="p-3">{p.full_name ?? "(sin nombre)"}</td>
+                      <td className="p-3 font-medium">
+                        <Link
+                          href={
+                            p.role === "owner"
+                              ? `/app/admin/cafeterias/${p.id}`
+                              : `/app/admin/clientes/${p.id}`
+                          }
+                          className="text-gray-900 hover:text-amber-600 hover:underline transition"
+                        >
+                          {p.full_name ?? "(sin nombre)"}
+                        </Link>
+                      </td>
                       <td className="p-3">{p.cedula}</td>
                       <td className="p-3">{p.role}</td>
                       <td className="p-3">
-                        <select
-                          className="border rounded-lg px-2 py-1"
-                          value={p.tier_id ?? ""}
-                          onChange={(e) =>
-                            setProfiles((arr) =>
-                              arr.map((x) => (x.id === p.id ? { ...x, tier_id: e.target.value || null } : x))
-                            )
-                          }
-                        >
-                          {tierOptions.map((t) => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
-                          ))}
-                        </select>
+                        {p.role === "owner" ? (
+                          <div className="flex flex-wrap gap-2">
+                            {(props.initialOwnerCafes?.[p.id] ?? []).length === 0 ? (
+                              <span className="text-neutral-500 text-sm">—</span>
+                            ) : (
+                              (props.initialOwnerCafes?.[p.id] ?? []).map((c) => (
+                                <span
+                                  key={c.cafe_id}
+                                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                                  style={{
+                                    backgroundColor: c.badge_color ? `${c.badge_color}20` : "#f3f4f6",
+                                    color: c.badge_color ?? "#374151",
+                                  }}
+                                >
+                                  {c.cafe_name}: {c.cafe_tier_name ?? "—"} ({c.total_points} pts)
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        ) : (
+                          <select
+                            className="border rounded-lg px-2 py-1"
+                            value={p.tier_id ?? ""}
+                            onChange={(e) =>
+                              setProfiles((arr) =>
+                                arr.map((x) => (x.id === p.id ? { ...x, tier_id: e.target.value || null } : x))
+                              )
+                            }
+                          >
+                            {tierOptions.map((t) => (
+                              <option key={t.id} value={t.id}>{t.name}</option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                       <td className="p-3">
                         <input
@@ -468,16 +505,18 @@ export default function AdminPanelClient(props: Props) {
                         />
                       </td>
                       <td className="p-3 flex gap-2">
-                        <button
-                          className="border rounded-lg px-3 py-1 hover:bg-neutral-50"
-                          onClick={async () => {
-                            const r = await adminUpdateProfileTier({ profile_id: p.id, tier_id: p.tier_id ?? null });
-                            if (!r.ok) return notify(`Error: ${r.error}`);
-                            notify("✅ Nivel actualizado");
-                          }}
-                        >
-                          Guardar nivel
-                        </button>
+                        {p.role !== "owner" && (
+                          <button
+                            className="border rounded-lg px-3 py-1 hover:bg-neutral-50"
+                            onClick={async () => {
+                              const r = await adminUpdateProfileTier({ profile_id: p.id, tier_id: p.tier_id ?? null });
+                              if (!r.ok) return notify(`Error: ${r.error}`);
+                              notify("✅ Nivel actualizado");
+                            }}
+                          >
+                            Guardar nivel
+                          </button>
+                        )}
 
                         <button
                           className={`border rounded-lg px-3 py-1 ${p.role === "admin" ? "opacity-50 cursor-not-allowed" : "hover:bg-neutral-50"}`}
