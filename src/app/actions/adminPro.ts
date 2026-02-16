@@ -204,7 +204,7 @@ export async function adminListProfiles() {
   const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, role, cedula, is_active, cafe_id, created_at")
+    .select("id, full_name, role, cedula, is_active, tier_id, cafe_id, created_at")
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -225,10 +225,11 @@ export async function adminUpdateProfileActive(input: unknown) {
     .maybeSingle();
 
   if (e1) throw e1;
-  if (!prof) return { ok: false as const, error: "Perfil no encontrado" };
+  if (!prof) return { ok: false, error: "Perfil no encontrado" };
 
-  if ((prof as { role?: string }).role === "admin" && parsed.is_active === false) {
-    return { ok: false as const, error: "El usuario admin no se puede desactivar." };
+  // 🔒 Admin NO se puede desactivar
+  if (prof.role === "admin" && parsed.is_active === false) {
+    return { ok: false, error: "El usuario admin no se puede desactivar." };
   }
 
   const { error: e2 } = await supabase
@@ -237,8 +238,7 @@ export async function adminUpdateProfileActive(input: unknown) {
     .eq("id", parsed.profile_id);
 
   if (e2) throw e2;
-
-  return { ok: true as const };
+  return { ok: true };
 }
 
 export async function adminSetProfileTier(input: unknown) {
@@ -305,7 +305,7 @@ export async function adminUpsertCafe(input: unknown) {
   const supabase = supabaseAdmin();
 
   const payload: { name: string; is_active: boolean } = {
-    name: parsed.name,
+    name: parsed.name.trim(),
     is_active: parsed.is_active,
   };
 
@@ -314,19 +314,19 @@ export async function adminUpsertCafe(input: unknown) {
       .from("cafes")
       .update(payload)
       .eq("id", parsed.id)
-      .select("id")
+      .select("id, name, is_active")
       .single();
 
     if (error) throw error;
-    return { ok: true as const, data };
+    return { ok: true, data };
   }
 
   const { data, error } = await supabase
     .from("cafes")
     .insert(payload)
-    .select("id")
+    .select("id, name, is_active")
     .single();
 
   if (error) throw error;
-  return { ok: true as const, data };
+  return { ok: true, data };
 }

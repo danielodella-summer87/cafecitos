@@ -52,7 +52,7 @@ type ProfileRow = {
   role: "consumer" | "owner" | "admin" | string;
   phone?: string | null;
   is_active: boolean | null;
-  tier_id?: string | null;
+  tier_id: string | null;
   cafe_id: string | null;
   created_at: string | null;
 };
@@ -271,8 +271,8 @@ export default function AdminPanelClient(props: {
                         notify((res as { error?: string }).error ?? "No se pudo crear");
                         return;
                       }
-                      const data = res.data as { id?: string } | undefined;
-                      setLocalCafes((prev) => [{ id: data?.id ?? "", name, is_active: true, created_at: null }, ...prev]);
+                      const data = res.data as { id?: string; name?: string; is_active?: boolean } | undefined;
+                      setLocalCafes((prev) => [{ id: data?.id ?? "", name: data?.name ?? name, is_active: data?.is_active ?? true, created_at: null }, ...prev]);
                       setNewCafeName("");
                       notify("✅ Cafetería creada");
                     } finally {
