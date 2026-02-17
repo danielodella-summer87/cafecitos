@@ -35,6 +35,8 @@ function computeBalance(profileId: string, txs: ConsumerTx[]) {
   return balance;
 }
 
+export type CafeMapItem = { name: string; image_code?: string | null };
+
 export type ConsumerSummaryResult = {
   session: { profileId: string; fullName: string | null; role: string };
   tierSlug: string;
@@ -42,7 +44,7 @@ export type ConsumerSummaryResult = {
   last10: ConsumerTx[];
   generatedTotal: number;
   redeemedTotal: number;
-  cafesMap: Record<string, string>;
+  cafesMap: Record<string, CafeMapItem>;
 };
 
 export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null> {
@@ -84,15 +86,19 @@ export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null
   const last10 = typed.slice(0, 10);
 
   const cafeIds = [...new Set(typed.map((t) => t.cafe_id).filter(Boolean))] as string[];
-  const cafesMap: Record<string, string> = {};
+  const cafesMap: Record<string, CafeMapItem> = {};
   if (cafeIds.length > 0) {
     const { data: cafes } = await supabase
       .from("cafes")
-      .select("id, name")
+      .select("id, name, image_code")
       .in("id", cafeIds);
     if (cafes) {
       for (const c of cafes) {
-        cafesMap[c.id] = (c as { name?: string }).name ?? "(sin nombre)";
+        const row = c as { id: string; name?: string; image_code?: string | null };
+        cafesMap[row.id] = {
+          name: row.name ?? "(sin nombre)",
+          image_code: row.image_code ?? null,
+        };
       }
     }
   }

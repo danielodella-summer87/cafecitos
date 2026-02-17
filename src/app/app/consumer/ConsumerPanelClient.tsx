@@ -1,13 +1,21 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import { logout } from "@/app/actions/logout";
-import type { ConsumerSummaryResult, ConsumerTx } from "@/app/actions/consumerSummary";
+import type { ConsumerSummaryResult, ConsumerTx, CafeMapItem } from "@/app/actions/consumerSummary";
 import { getTxMeta } from "@/lib/ui/txLabels";
 import { getMembershipTier, getNextTierInfo } from "@/lib/ui/membership";
-import { PRO } from "@/lib/ui/pro";
+import {
+  Container,
+  PageHeader,
+  Card,
+  CardTitle,
+  CardSubtitle,
+  Button,
+  Badge,
+} from "@/app/ui/components";
+import { PromoCard, CafeCard } from "@/app/ui/media";
 
 const BENEFIT_TARGET = 100;
 
@@ -15,9 +23,9 @@ type Props = {
   data: ConsumerSummaryResult;
 };
 
-function cafeName(cafeId: string | null, cafesMap: Record<string, string>): string {
+function cafeName(cafeId: string | null, cafesMap: Record<string, CafeMapItem>): string {
   if (!cafeId) return "(sin cafetería)";
-  return cafesMap[cafeId] ?? "(sin cafetería)";
+  return cafesMap[cafeId]?.name ?? "(sin cafetería)";
 }
 
 export default function ConsumerPanelClient({ data }: Props) {
@@ -27,128 +35,131 @@ export default function ConsumerPanelClient({ data }: Props) {
   const { session, balance, last10, generatedTotal, redeemedTotal, cafesMap } = data;
   const missing = Math.max(0, BENEFIT_TARGET - balance);
   const progressPct = Math.min(100, (balance / BENEFIT_TARGET) * 100);
+  const tier = getMembershipTier(balance);
+  const next = getNextTierInfo(balance);
+
+  const rightSlot = (
+    <form action={logout}>
+      <Button type="submit" variant="danger" size="sm">
+        Salir
+      </Button>
+    </form>
+  );
 
   return (
-    <main className={PRO.page}>
-      <div className="mx-auto max-w-2xl px-4 py-8">
-        <header className="flex items-start justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
-            <Image
-              src="/logoamorperfecto.png"
-              alt="Amor Perfecto"
-              width={96}
-              height={96}
-              priority
-              className="h-[4.5rem] w-auto"
-            />
+    <main>
+      <Container>
+        <PageHeader
+          title="Cafecitos"
+          subtitle="Tu universo de cafés, beneficios y experiencias."
+          rightSlot={rightSlot}
+        />
 
-            <div>
-              <h1 className="text-xl font-semibold text-black">
-                Hola, {session.fullName ?? "Consumidor"}
-              </h1>
-              {/* Membresía */}
-              {(() => {
-                const tier = getMembershipTier(balance);
-                const next = getNextTierInfo(balance);
-                return (
-                  <div className="mt-1 flex flex-col gap-1">
-                    <div className="inline-flex items-center gap-2">
-                      <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${tier.badgeClass}`}>
-                        <span className={`h-2.5 w-2.5 rounded-full ${tier.dotClass}`} aria-hidden="true" />
-                        <span>
-                          {tier.name} · {tier.tagline}
-                        </span>
-                      </span>
-                    </div>
-                    {next.nextName && next.remaining > 0 ? (
-                      <div className="text-xs text-neutral-600">
-                        Te faltan <span className="font-semibold text-neutral-900">{next.remaining}</span> cafecitos para llegar a{" "}
-                        <span className="font-semibold text-neutral-900">{next.nextName}</span>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })()}
+        {/* 3 cards arriba */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Card>
+            <CardSubtitle>Saldo de cafecitos</CardSubtitle>
+            <p className="mt-2 text-3xl font-semibold text-[#0F172A]">☕ {balance}</p>
+            <p className="mt-1 text-xs text-[#64748B]">disponibles</p>
+          </Card>
+          <Card>
+            <CardSubtitle>Tu nivel</CardSubtitle>
+            <div className="mt-2 flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${tier.dotClass}`} aria-hidden />
+              <Badge variant="accent">{tier.name}</Badge>
             </div>
+            {next.nextName && next.remaining > 0 ? (
+              <p className="mt-2 text-sm text-[#64748B]">
+                Faltan <strong className="text-[#0F172A]">{next.remaining}</strong> para {next.nextName}
+              </p>
+            ) : null}
+          </Card>
+          <div className="grid gap-4 md:grid-cols-2">
+            <PromoCard
+              title="Desayuno 2x1"
+              description="Solo esta semana en cafeterías adheridas."
+              image="https://images.unsplash.com/photo-1509042239860-f550ce710b93"
+              cta="Ver promos"
+            />
+            <PromoCard
+              title="Happy Coffee"
+              description="Cafecitos extra después de las 17hs."
+              image="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085"
+              cta="Descubrir"
+            />
           </div>
-
-          <form action={logout}>
-            <button
-              type="submit"
-              className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
-            >
-              Salir
-            </button>
-          </form>
-        </header>
-
-        {/* Card principal: cafecitos disponibles */}
-        <div className="rounded-2xl border border-neutral-200 bg-white p-6 mb-6">
-          <p className="text-4xl font-semibold">☕ {balance} cafecitos disponibles</p>
         </div>
 
-        {/* Próximo beneficio (target 100) */}
-        <div className="rounded-2xl border border-neutral-200 bg-white p-6 mb-6">
-          <h2 className="font-semibold mb-2">Próximo beneficio</h2>
+        {/* Cafeterías cerca / explorá */}
+        <div className="mt-6">
+          <h2 className="mb-4 text-lg font-semibold text-[#0F172A]">Cafeterías cerca / explorá</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <CafeCard
+              name="Amor Perfecto"
+              tag="Especialidad"
+              image="https://images.unsplash.com/photo-1559925393-8be0ec4767c8"
+            />
+            <CafeCard
+              name="Cafe Nadia 2026"
+              tag="Clásico"
+              image="https://images.unsplash.com/photo-1511920170033-f8396924c348"
+            />
+          </div>
+        </div>
+
+        {/* Eventos */}
+        <div className="mt-6">
+          <Card>
+            <CardTitle>Eventos esta semana</CardTitle>
+            <CardSubtitle>Próximamente</CardSubtitle>
+            <p className="mt-2 text-sm text-[#64748B]">Sin eventos programados</p>
+          </Card>
+        </div>
+
+        {/* Bloque extra: próximo beneficio + generado/canjeado (mantener lógica existente) */}
+        <Card className="mt-6">
+          <CardTitle>Próximo beneficio</CardTitle>
           {missing === 0 ? (
-            <p className="text-green-700 font-medium">¡Alcanzaste tu próximo café gratis!</p>
+            <p className="mt-2 font-medium text-[#16A34A]">¡Alcanzaste tu próximo café gratis!</p>
           ) : (
-            <p className="text-neutral-600 mb-3">
-              Te faltan <strong>{missing}</strong> cafecitos para tu próximo café gratis.
+            <p className="mt-2 text-sm text-[#64748B]">
+              Te faltan <strong className="text-[#0F172A]">{missing}</strong> cafecitos para tu próximo café gratis.
             </p>
           )}
-          <div className="w-full h-3 bg-neutral-200 rounded-full overflow-hidden">
+          <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-[#E2E8F0]">
             <div
-              className="h-full bg-green-500 rounded-full transition-all"
+              className="h-full rounded-full bg-[#16A34A] transition-all"
               style={{ width: `${progressPct}%` }}
             />
           </div>
-          <p className="text-xs text-neutral-500 mt-2">{Math.round(progressPct)}%</p>
+          <p className="mt-1 text-xs text-[#64748B]">{Math.round(progressPct)}%</p>
+        </Card>
+
+        <div className="mt-6 grid grid-cols-2 gap-4">
+          <Card>
+            <CardSubtitle>Generado total</CardSubtitle>
+            <p className="mt-1 text-2xl font-semibold text-[#16A34A]">+{generatedTotal}</p>
+          </Card>
+          <Card>
+            <CardSubtitle>Canjeado total</CardSubtitle>
+            <p className="mt-1 text-2xl font-semibold text-orange-600">−{redeemedTotal}</p>
+          </Card>
         </div>
 
-        {/* Universo Café (modo Netflix: siempre entra, locks adentro) */}
-        <Link
-          href="/app/universo-cafe"
-          className="block w-full mb-6 rounded-2xl border border-neutral-200 bg-white p-5 text-left shadow-sm transition hover:shadow-md"
-        >
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 text-xl">☕</div>
-            <div className="min-w-0">
-              <div className="text-base font-semibold">Universo Café</div>
-              <div className="mt-1 text-sm text-neutral-600">
-                Descubrí tipos, métodos y preparaciones
-              </div>
-            </div>
-          </div>
-        </Link>
-
-        {/* Generado total / Canjeado total */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="rounded-xl border border-neutral-200 bg-white p-4">
-            <p className="text-xs text-neutral-500 uppercase tracking-wide mb-1">Generado total</p>
-            <p className="text-2xl font-semibold text-green-700">+{generatedTotal}</p>
-          </div>
-          <div className="rounded-xl border border-neutral-200 bg-white p-4">
-            <p className="text-xs text-neutral-500 uppercase tracking-wide mb-1">Canjeado total</p>
-            <p className="text-2xl font-semibold text-orange-600">−{redeemedTotal}</p>
-          </div>
-        </div>
-
-        {/* Últimos movimientos (colapsado por defecto) */}
-        <div className="mt-6 rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
+        {/* Últimos movimientos */}
+        <Card className="mt-6">
           <details className="group">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span aria-hidden>☕</span>
-                <h3 className="text-sm font-semibold text-black">Últimos movimientos</h3>
+                <CardTitle className="!mt-0">Últimos movimientos</CardTitle>
               </div>
-              <span className="text-xs text-black/60 group-open:hidden">Mostrar</span>
-              <span className="text-xs text-black/60 hidden group-open:inline">Ocultar</span>
+              <span className="text-xs text-[#64748B] group-open:hidden">Mostrar</span>
+              <span className="text-xs text-[#64748B] hidden group-open:inline">Ocultar</span>
             </summary>
-
-            <div className="mt-3 space-y-2">
+            <div className="mt-4 space-y-2 border-t border-[rgba(15,23,42,0.10)] pt-4">
               {last10.length === 0 ? (
-                <p className="text-sm text-black/60">Sin movimientos todavía</p>
+                <p className="text-sm text-[#64748B]">Sin movimientos todavía</p>
               ) : (
                 <ul className="space-y-2">
                   {last10.map((t) => (
@@ -158,13 +169,12 @@ export default function ConsumerPanelClient({ data }: Props) {
               )}
             </div>
           </details>
-        </div>
+        </Card>
 
-        {/* Debug ?debug=1 */}
         {debug && (
-          <div className="mt-6 p-4 rounded-lg border border-neutral-300 bg-neutral-50">
-            <div className="font-bold mb-2">DEBUG</div>
-            <pre className="text-xs overflow-auto whitespace-pre-wrap">
+          <div className="mt-6 rounded-xl border border-[rgba(15,23,42,0.10)] bg-[#F8FAFC] p-4">
+            <div className="mb-2 font-semibold">DEBUG</div>
+            <pre className="overflow-auto whitespace-pre-wrap text-xs">
               {JSON.stringify(
                 {
                   session,
@@ -178,7 +188,7 @@ export default function ConsumerPanelClient({ data }: Props) {
             </pre>
           </div>
         )}
-      </div>
+      </Container>
     </main>
   );
 }
@@ -190,7 +200,7 @@ function MovementRow({
 }: {
   tx: ConsumerTx;
   profileId: string;
-  cafesMap: Record<string, string>;
+  cafesMap: Record<string, CafeMapItem>;
 }) {
   const isIn = tx.to_profile_id === profileId;
   const sign = isIn ? "+" : "−";
@@ -204,18 +214,18 @@ function MovementRow({
     : "";
 
   return (
-    <li className="flex items-center justify-between gap-4 py-2 border-b border-neutral-100 last:border-0">
+    <li className="flex items-center justify-between gap-4 border-b border-[rgba(15,23,42,0.06)] py-2 last:border-0">
       <div className="min-w-0 flex-1">
         <p className={`text-sm font-medium ${meta.color}`}>
           {meta.icon} {meta.label}
         </p>
-        <p className="text-sm text-neutral-600">{cafeLabel}</p>
-        <p className="text-xs text-neutral-500">
+        <p className="text-sm text-[#64748B]">{cafeLabel}</p>
+        <p className="text-xs text-[#64748B]">
           {tx.note ?? "—"} · {dateStr}
         </p>
       </div>
       <span
-        className={`font-semibold whitespace-nowrap ${isIn ? "text-green-700" : "text-orange-600"}`}
+        className={`whitespace-nowrap font-semibold ${isIn ? "text-[#16A34A]" : "text-orange-600"}`}
       >
         {sign}{tx.amount}
       </span>

@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { theme } from "@/app/ui/theme";
 import WelcomeGuard from "./WelcomeGuard";
 
 export default async function AppLayout({
@@ -30,7 +31,11 @@ export default async function AppLayout({
 
   return (
     <WelcomeGuard shouldShowWelcome={shouldShowWelcome}>
-      {children}
+      <div className="min-h-screen bg-app">
+        <div className="mx-auto w-full" style={{ maxWidth: theme.containerMax }}>
+          {children}
+        </div>
+      </div>
     </WelcomeGuard>
   );
 }
