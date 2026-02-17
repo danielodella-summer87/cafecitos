@@ -83,7 +83,11 @@ export function PromoCard({
                     <Wrapper
                       key={key}
                       type={clickable ? "button" : undefined}
-                      onClick={clickable ? () => onOpenCafe?.(idOrName) : undefined}
+                      onClick={
+                        clickable && idOrName
+                          ? () => onOpenCafe?.(idOrName)
+                          : undefined
+                      }
                       className={`inline-flex items-center rounded-full border border-[rgba(15,23,42,0.15)] bg-white/70 px-2.5 py-1 text-xs text-[#0F172A] transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-1 ${clickable ? "cursor-pointer hover:bg-white/90" : "cursor-default"}`}
                     >
                       {label}
