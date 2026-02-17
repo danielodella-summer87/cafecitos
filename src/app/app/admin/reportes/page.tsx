@@ -35,7 +35,7 @@ export default async function AdminReportesPage() {
   let topClientesGlobal: Awaited<ReturnType<typeof getAdminTopClientesGlobal>> = [];
   let alerts: Awaited<ReturnType<typeof getAdminAlerts>> = [];
   let panelClientesGlobal: Awaited<ReturnType<typeof getAdminPanelClientesGlobal>> = [];
-  let reportesLoadError = false;
+  let reportesLoadError: string | null = null;
 
   try {
     const [k, c, d, t, a, p] = await Promise.all([
@@ -53,8 +53,9 @@ export default async function AdminReportesPage() {
     alerts = a;
     panelClientesGlobal = p;
   } catch (e) {
+    const err = e as Error;
     console.error("REPORTES load error", e);
-    reportesLoadError = true;
+    reportesLoadError = String(err?.message ?? err);
   }
 
   return (

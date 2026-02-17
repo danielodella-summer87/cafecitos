@@ -34,7 +34,7 @@ type Props = {
   topClientesGlobal: TopClienteGlobalRow[];
   alerts: AlertRow[];
   panelClientesGlobal: PanelClienteGlobalRow[];
-  reportesLoadError?: boolean;
+  reportesLoadError?: string | null;
 };
 
 export default function ReportesPanelClient({
@@ -44,7 +44,7 @@ export default function ReportesPanelClient({
   topClientesGlobal: tops,
   alerts: al,
   panelClientesGlobal: panelClientes = [],
-  reportesLoadError = false,
+  reportesLoadError = null,
 }: Props) {
   const [tab, setTab] = useState<"clientes" | "cafeterias">("clientes");
 
@@ -61,7 +61,7 @@ export default function ReportesPanelClient({
 
       {reportesLoadError ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
-          ⚠️ No se pudieron cargar los reportes (ver logs).
+          ⚠️ {reportesLoadError}
         </div>
       ) : null}
 

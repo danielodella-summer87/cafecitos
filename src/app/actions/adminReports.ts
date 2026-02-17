@@ -792,18 +792,12 @@ export async function getAdminTopClientesGlobal(
 
 export async function getAdminPanelClientesGlobal(): Promise<PanelClienteGlobalRow[]> {
   await adminGuard();
-  const supabase = supabaseAdmin();
-  const { data, error } = await supabase
-    .from("v_panel_clientes_global")
-    .select("*");
-
+  const supa = supabaseAdmin();
+  const { data, error } = await supa.from("v_panel_clientes_global").select("*");
   if (error) {
-    const errAny: any = error;
-    const full = JSON.stringify(errAny, Object.getOwnPropertyNames(errAny));
-    console.error("getAdminPanelClientesGlobal supabase error:", errAny, full);
-    throw new Error(
-      `getAdminPanelClientesGlobal: message=${errAny?.message ?? ""} code=${errAny?.code ?? ""} details=${errAny?.details ?? ""} hint=${errAny?.hint ?? ""} full=${full}`
-    );
+    const dump = JSON.stringify(error, Object.getOwnPropertyNames(error));
+    console.error("getAdminPanelClientesGlobal supabase error:", dump);
+    throw new Error("getAdminPanelClientesGlobal supabase error: " + dump);
   }
   const rows = (data ?? []) as any[];
   rows.sort((a, b) => Number(b?.neto ?? 0) - Number(a?.neto ?? 0));
