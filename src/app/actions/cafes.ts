@@ -1,0 +1,121 @@
+"use server";
+
+import { supabaseAdmin } from "@/lib/supabase/admin";
+
+export type CreateCafeInput = {
+  name: string;
+  city?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  instagram?: string;
+  description?: string;
+  image_code: string; // "01".."99"
+  staff: Array<{
+    name: string;
+    role: string;
+    is_owner?: boolean;
+  }>;
+};
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+async function getNextAvailableImageCode(): Promise<string> {
+  const sb = supabaseAdmin();
+
+  const { data, error } = await sb.from("cafes").select("image_code");
+  if (error) throw new Error(`getNextAvailableImageCode: ${error.message}`);
+
+  const used = new Set(
+    (data ?? [])
+      .map((r: { image_code?: string | null }) => (r?.image_code ?? "").toString())
+      .filter((v: string) => /^[0-9]{2}$/.test(v))
+  );
+
+  for (let i = 1; i <= 99; i++) {
+    const code = pad2(i);
+    if (!used.has(code)) return code;
+  }
+  throw new Error("No hay códigos disponibles (01..99).");
+}
+
+/** Devuelve el próximo image_code disponible (01..99) para mostrar en el formulario. */
+export async function getNextImageCode(): Promise<string> {
+  return getNextAvailableImageCode();
+}
+
+export async function createCafe(
+  input: Omit<CreateCafeInput, "image_code"> & { image_code?: string }
+) {
+  const sb = supabaseAdmin();
+
+  const name = (input.name ?? "").trim();
+  if (name.length < 5) throw new Error("El nombre debe tener al menos 5 caracteres.");
+
+  const staff = (input.staff ?? [])
+    .map((s, idx) => ({
+      name: (s.name ?? "").trim(),
+      role: (s.role ?? "").trim(),
+      is_owner: idx === 0 ? true : Boolean(s.is_owner),
+    }))
+    .filter((s) => s.name.length > 0 && s.role.length > 0);
+
+  if (staff.length < 1) throw new Error("Debe existir al menos 1 persona autorizada (Dueño/a).");
+  if (staff.length > 5) throw new Error("Máximo 5 personas autorizadas.");
+
+  const image_code =
+    (input.image_code ?? "").trim() || (await getNextAvailableImageCode());
+  const codePadded = /^[0-9]{2}$/.test(image_code) ? image_code : pad2(Number(image_code) || 1);
+
+  const { data: cafe, error: cafeErr } = await sb
+    .from("cafes")
+    .insert({
+      name,
+      city: input.city ?? null,
+      address: input.address ?? null,
+      phone: input.phone ?? null,
+      email: input.email ?? null,
+      instagram: input.instagram ?? null,
+      description: input.description ?? null,
+      image_code: codePadded,
+      is_active: true,
+    })
+    .select("id, name, image_code")
+    .single();
+
+  if (cafeErr) throw new Error(`createCafe insert cafes: ${cafeErr.message}`);
+
+  const normalizedStaff = staff.map((s, idx) => ({
+    cafe_id: cafe.id,
+    name: s.name,
+    role: idx === 0 ? "Dueño/a" : s.role,
+    is_owner: idx === 0 ? true : s.is_owner,
+    can_issue: true,
+    can_redeem: true,
+  }));
+
+  const { error: staffErr } = await sb.from("cafe_staff").insert(normalizedStaff);
+  if (staffErr) throw new Error(`createCafe insert cafe_staff: ${staffErr.message}`);
+
+  return cafe as { id: string; name: string; image_code: string };
+}
+
+export type CafeListItem = {
+  id: string;
+  name: string;
+  is_active: boolean;
+  image_code: string | null;
+};
+
+/** Lista cafeterías para el admin (id, name, is_active, image_code). */
+export async function getCafes(): Promise<CafeListItem[]> {
+  const sb = supabaseAdmin();
+  const { data, error } = await sb
+    .from("cafes")
+    .select("id, name, is_active, image_code")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`getCafes: ${error.message}`);
+  return (data ?? []) as CafeListItem[];
+}

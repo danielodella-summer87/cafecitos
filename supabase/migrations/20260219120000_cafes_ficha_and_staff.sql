@@ -1,0 +1,33 @@
+-- Columnas extra en cafes para ficha (teléfono, email, descripción, imagen)
+alter table public.cafes
+  add column if not exists phone text,
+  add column if not exists email text,
+  add column if not exists instagram text,
+  add column if not exists description text,
+  add column if not exists image_code text;
+
+-- Personas autorizadas por cafetería (nombre/rol, no necesariamente profile)
+create table if not exists public.cafe_staff (
+  id uuid primary key default gen_random_uuid(),
+  cafe_id uuid not null references public.cafes(id) on delete cascade,
+  name text not null,
+  role text not null,
+  is_owner boolean not null default false,
+  can_issue boolean not null default true,
+  can_redeem boolean not null default true,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_cafe_staff_cafe_id on public.cafe_staff(cafe_id);
+
+-- Unicidad de image_code (opcional, para evitar duplicados)
+do $$
+begin
+  if not exists (
+    select 1 from pg_indexes
+    where schemaname = 'public' and indexname = 'cafes_image_code_unique'
+  ) then
+    create unique index cafes_image_code_unique on public.cafes (image_code)
+    where image_code is not null and image_code <> '';
+  end if;
+end $$;

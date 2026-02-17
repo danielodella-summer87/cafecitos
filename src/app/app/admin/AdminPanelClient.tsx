@@ -108,7 +108,9 @@ export default function AdminPanelClient(props: Props) {
             Niveles
           </Link>
           <button className={`px-4 py-2 rounded-md border ${tab === "profiles" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("profiles")}>Socios</button>
-          <button className={`px-4 py-2 rounded-md border ${tab === "cafes" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("cafes")}>Cafeterías</button>
+          <Link href="/app/admin/cafes" className="px-4 py-2 rounded-md border bg-white hover:bg-neutral-50 text-neutral-700 no-underline">
+            Cafeterías
+          </Link>
           <Link href="/app/admin/reportes" className="px-4 py-2 rounded-md border bg-white hover:bg-neutral-50 text-neutral-700">
             Reportes
           </Link>
