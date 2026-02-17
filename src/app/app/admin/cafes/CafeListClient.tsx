@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Container, PageHeader, Button, Card, CardTitle, Badge } from "@/app/ui/components";
+import { Container, Button, Card, CardTitle, Badge } from "@/app/ui/components";
+import CafeName from "@/app/ui/CafeName";
 import { getNextImageCode } from "@/app/actions/cafes";
 import type { CafeListItem } from "@/app/actions/cafes";
 import CafeForm from "./CafeForm";
@@ -26,14 +28,16 @@ function CafeListCard({ cafe }: { cafe: CafeListItem }) {
       <div className="relative h-36 w-full bg-[#F1F5F9]">
         <Image
           src={src}
-          alt={cafe.name}
+          alt={`${(cafe.image_code ?? "").toString().padStart(2, "0")} - ${cafe.name}`}
           fill
           className="object-cover"
           onError={() => setSrc(COVER_DEFAULT)}
         />
       </div>
       <div className="p-4">
-        <CardTitle>{cafe.name}</CardTitle>
+        <CardTitle>
+          <CafeName cafe={cafe} />
+        </CardTitle>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {cafe.is_active ? (
             <Badge variant="success">Activa</Badge>
@@ -41,7 +45,7 @@ function CafeListCard({ cafe }: { cafe: CafeListItem }) {
             <Badge variant="neutral">Inactiva</Badge>
           )}
           <Link
-            href={`/app/admin/cafes/${cafe.id}`}
+            href={`/app/admin/cafes/${cafe.id}/edit`}
             className="text-sm font-medium text-[#C0841A] hover:underline"
           >
             Editar
@@ -58,6 +62,7 @@ type Props = {
 };
 
 export default function CafeListClient({ cafes: initialCafes, nextCode }: Props) {
+  const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [nextCodeState, setNextCodeState] = useState(nextCode);
 
@@ -73,14 +78,21 @@ export default function CafeListClient({ cafes: initialCafes, nextCode }: Props)
 
   return (
     <Container>
-      <PageHeader
-        title="Cafeterías"
-        rightSlot={
-          <Button type="button" onClick={openForm}>
-            + Nueva cafetería
-          </Button>
-        }
-      />
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <Button
+          type="button"
+          variant="danger"
+          onClick={() => router.push("/app/admin")}
+        >
+          ← Volver
+        </Button>
+        <h1 className="min-w-0 flex-1 text-2xl font-semibold tracking-tight text-[#0F172A]">
+          Cafeterías
+        </h1>
+        <Button type="button" onClick={openForm}>
+          + Nueva cafetería
+        </Button>
+      </div>
 
       {!creating && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

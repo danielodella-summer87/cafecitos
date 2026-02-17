@@ -3,58 +3,128 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Card, CardTitle, CardSubtitle, Button } from "./components";
+import CafeName from "./CafeName";
 
 const DEFAULT_COVER = "/media/cover-default.jpg";
+
+type CafeItem = { id?: string; name?: string } | string;
 
 export function PromoCard({
   title,
   description,
   image,
   cta,
+  cafes,
+  onDiscoverClick,
+  onOpenCafe,
   fallbackImage = DEFAULT_COVER,
 }: {
   title: string;
-  description: string;
+  description: React.ReactNode;
   image: string;
   cta?: string;
+  cafes?: CafeItem[];
+  onDiscoverClick?: () => void;
+  /** Al hacer click en una cafetería del listado "Te esperamos en …" */
+  onOpenCafe?: (idOrName: string) => void;
   fallbackImage?: string;
 }) {
-  const [src, setSrc] = useState(image);
-  const handleError = () => setSrc(fallbackImage);
+  const [imgSrc, setImgSrc] = useState(image);
+  const list = cafes ?? [];
 
   return (
-    <Card className="overflow-hidden p-0">
-      <div className="relative h-40 w-full">
+    <Card className="h-full overflow-hidden !bg-[#F6EFE6] border border-[rgba(15,23,42,0.10)] p-0">
+      {/* Imagen */}
+      <div className="relative h-36 sm:h-40 w-full overflow-hidden rounded-t-2xl">
         <Image
-          src={src}
+          src={imgSrc}
           alt={title}
           fill
           className="object-cover"
-          onError={handleError}
+          onError={() => setImgSrc(fallbackImage ?? DEFAULT_COVER)}
+          sizes="(max-width: 640px) 85vw, (max-width: 1024px) 48vw, 24vw"
         />
       </div>
 
-      <div className="p-4 space-y-2">
-        <CardTitle>{title}</CardTitle>
-        <CardSubtitle>{description}</CardSubtitle>
+      {/* Body */}
+      <div className="flex h-full flex-col px-4 py-4">
+        <div>
+          <CardTitle className="text-base sm:text-lg leading-snug">
+            {title}
+          </CardTitle>
+          <CardSubtitle className="mt-2 text-sm leading-relaxed line-clamp-4">
+            {description}
+          </CardSubtitle>
+        </div>
 
-        {cta && (
-          <Button variant="primary" size="sm">
-            {cta}
+        {/* Cafeterías colapsadas (sin chips visibles cerrado) */}
+        <div className="mt-3">
+          <details className="rounded-xl border border-[rgba(15,23,42,0.15)] bg-white/40 px-3 py-2 group">
+            <summary className="cursor-pointer list-none select-none flex items-center justify-between gap-3">
+              <div className="text-sm font-medium text-[#0F172A]">
+                Te esperamos en …
+              </div>
+              <div className="flex items-center gap-2 text-slate-600">
+                <span aria-hidden className="text-base leading-none">🏠</span>
+                <span aria-hidden className="text-base leading-none transition-transform group-open:rotate-180">
+                  ▾
+                </span>
+              </div>
+            </summary>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {list.length > 0 ? (
+                list.map((c: CafeItem) => {
+                  const key = typeof c === "object" && c ? (c.id ?? c.name ?? String(c)) : String(c);
+                  const label = typeof c === "object" && c && "name" in c ? c.name : String(c);
+                  const idOrName = typeof c === "object" && c && "id" in c ? (c as { id: string }).id : label;
+                  const clickable = Boolean(onOpenCafe);
+                  const Wrapper = clickable ? "button" : "span";
+                  return (
+                    <Wrapper
+                      key={key}
+                      type={clickable ? "button" : undefined}
+                      onClick={clickable ? () => onOpenCafe?.(idOrName) : undefined}
+                      className={`inline-flex items-center rounded-full border border-[rgba(15,23,42,0.15)] bg-white/70 px-2.5 py-1 text-xs text-[#0F172A] transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-1 ${clickable ? "cursor-pointer hover:bg-white/90" : "cursor-default"}`}
+                    >
+                      {label}
+                    </Wrapper>
+                  );
+                })
+              ) : (
+                <div className="text-sm text-slate-600">
+                  Próximamente más cafeterías adheridas.
+                </div>
+              )}
+            </div>
+          </details>
+        </div>
+
+        {/* Footer abajo */}
+        <div className="mt-auto pt-4">
+          <Button
+            className="w-full"
+            variant="primary"
+            size="md"
+            type="button"
+            onClick={onDiscoverClick}
+          >
+            Descubrir
           </Button>
-        )}
+        </div>
       </div>
     </Card>
   );
 }
 
+type CafeLike = { name?: string | null; image_code?: string | number | null };
+
 export function CafeCard({
-  name,
+  cafe,
   image,
   tag,
   fallbackImage = DEFAULT_COVER,
 }: {
-  name: string;
+  cafe: CafeLike;
   image: string;
   tag?: string;
   fallbackImage?: string;
@@ -65,11 +135,19 @@ export function CafeCard({
   return (
     <Card className="overflow-hidden p-0 hover:scale-[1.01] transition">
       <div className="relative h-32 w-full">
-        <Image src={src} alt={name} fill className="object-cover" onError={handleError} />
+        <Image
+          src={src}
+          alt={cafe.name ? `Foto ${cafe.name}` : "Foto de cafetería"}
+          fill
+          className="object-cover"
+          onError={handleError}
+        />
       </div>
 
       <div className="p-4">
-        <CardTitle>{name}</CardTitle>
+        <CardTitle>
+          <CafeName cafe={cafe} />
+        </CardTitle>
         {tag && <CardSubtitle>{tag}</CardSubtitle>}
       </div>
     </Card>

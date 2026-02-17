@@ -101,6 +101,20 @@ body {
   box-shadow: 0 0 0 4px rgba(var(--ap-accent), 0.15);
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Ocultar scrollbar en carruseles (scroll-snap) */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 .ap-btn {
   width: 100%;
   border-radius: 0.75rem;

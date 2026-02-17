@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { loginUser } from "@/app/actions/auth";
 import { PRO } from "@/lib/ui/pro";
+import AppName from "@/app/ui/AppName";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export default function LoginPage() {
   return (
     <div className={`${PRO.center} min-h-screen py-8`}>
       <div className={PRO.container}>
-        <div className={`${PRO.card} pb-8`}>
+        <div className={`${PRO.card} pb-8 !bg-[#F6EFE6] border border-[rgba(15,23,42,0.08)]`}>
           {/* LOGO (ancho similar al título) */}
           <div className="mx-auto mb-4 w-[260px] md:w-[320px]">
             <Image
@@ -53,7 +54,7 @@ export default function LoginPage() {
             />
           </div>
 
-          <h1 className={PRO.h1}>Cafecitos</h1>
+          <h1 className={PRO.h1}><AppName /></h1>
           <div className={PRO.divider} />
           <p className={PRO.subtitle}>Accede con tu cédula y pin de 4 dígitos.</p>
 
@@ -105,7 +106,7 @@ export default function LoginPage() {
             </div>
 
             <p className="text-center text-xs text-neutral-500 mt-2">
-              © {new Date().getFullYear()} Amor Perfecto
+              © 2026 Summer87 / Daniel Odella
             </p>
           </form>
         </div>

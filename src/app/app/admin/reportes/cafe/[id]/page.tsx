@@ -7,6 +7,8 @@ import {
   getAdminCafeDailyKpis,
   getAdminCafeTopClients7d,
 } from "@/app/actions/adminReports";
+import AppName from "@/app/ui/AppName";
+import CafeName from "@/app/ui/CafeName";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -42,7 +44,9 @@ export default async function CafeReportPage({ params }: Props) {
           >
             ← Volver a reportes
           </Link>
-          <h1 className="text-2xl font-semibold mt-2">☕ {cafe.name ?? "Cafetería"}</h1>
+          <h1 className="text-2xl font-semibold mt-2">
+            <CafeName cafe={cafe} showCup />
+          </h1>
           <p className="text-sm text-gray-500">Detalle de performance del local</p>
         </div>
       </div>
@@ -54,7 +58,7 @@ export default async function CafeReportPage({ params }: Props) {
           subtitle={`Clientes únicos: ${fmtInt(k.clientes_unicos_30d)}`}
         />
         <KpiCard
-          title="Cafecitos netos (30d)"
+          title={<><AppName /> netos (30d)</>}
           value={fmtInt(k.neto_30d)}
           subtitle={`Generado: ${fmtInt(k.generado_30d)} · Canjeado: ${fmtInt(k.canjeado_30d)}`}
         />
@@ -149,7 +153,7 @@ function KpiCard({
   value,
   subtitle,
 }: {
-  title: string;
+  title: React.ReactNode;
   value: string;
   subtitle?: string;
 }) {

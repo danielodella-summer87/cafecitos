@@ -3,6 +3,18 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
 
+/** Filas del view v_report_cafes_30d_all (todas las cafeterías, 30d, incl. 0 movimientos) */
+export type VReportCafes30dAllRow = {
+  cafe_id: string;
+  cafeteria: string;
+  image_code: string | null;
+  is_active: boolean;
+  movimientos: number;
+  generado: number;
+  canjeado: number;
+  neto: number;
+};
+
 export type CafeKpiRow = {
   cafe_id: string;
   cafe_nombre: string | null;
@@ -11,6 +23,8 @@ export type CafeKpiRow = {
   canjeado: number;
   neto: number;
   tasa_canje: number;
+  image_code?: string | null;
+  is_active?: boolean;
 };
 
 export type TopCustomerRow = {
@@ -103,60 +117,37 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export async function getAdminCafeKpis(days = 30): Promise<CafeKpiRow[]> {
+/** Rendimiento por cafetería (30 días). Fuente: view v_report_cafes_30d_all (todas las cafeterías, incl. 0 movimientos). */
+export async function getAdminCafeKpis30d(): Promise<CafeKpiRow[]> {
   await adminGuard();
   const supabase = supabaseAdmin();
 
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const sinceIso = since.toISOString();
-
-  const { data: txs, error } = await supabase
-    .from("point_transactions")
-    .select("cafe_id, from_profile_id, to_profile_id, amount, created_at")
-    .not("cafe_id", "is", null)
-    .gte("created_at", sinceIso);
+  const { data, error } = await supabase
+    .from("v_report_cafes_30d_all")
+    .select("cafe_id, cafeteria, image_code, is_active, movimientos, generado, canjeado, neto");
 
   if (error) {
-    console.error("getAdminCafeKpis", error);
+    console.error("getAdminCafeKpis30d", error);
     return [];
   }
 
-  const cafesIds = [...new Set((txs ?? []).map((t) => t.cafe_id).filter(Boolean))] as string[];
-  const cafesMap: Record<string, string> = {};
-  if (cafesIds.length > 0) {
-    const { data: cafes } = await supabase.from("cafes").select("id, name").in("id", cafesIds);
-    for (const c of cafes ?? []) {
-      cafesMap[c.id] = (c as { name?: string }).name ?? "";
-    }
-  }
-
-  const byCafe: Record<
-    string,
-    { movimientos: number; generado: number; canjeado: number }
-  > = {};
-
-  for (const t of txs ?? []) {
-    const cid = t.cafe_id ?? "";
-    if (!cid) continue;
-    if (!byCafe[cid]) byCafe[cid] = { movimientos: 0, generado: 0, canjeado: 0 };
-    byCafe[cid].movimientos += 1;
-    const amt = num(t.amount);
-    if (t.to_profile_id) byCafe[cid].generado += amt;
-    if (t.from_profile_id) byCafe[cid].canjeado += amt;
-  }
-
-  const rows: CafeKpiRow[] = Object.entries(byCafe).map(([cafe_id, v]) => {
-    const neto = v.generado - v.canjeado;
-    const tasa_canje = v.generado === 0 ? 0 : Math.round((v.canjeado / v.generado) * 100) / 100;
+  const viewRows = (data ?? []) as VReportCafes30dAllRow[];
+  const rows: CafeKpiRow[] = viewRows.map((row) => {
+    const generado = num(row.generado);
+    const canjeado = num(row.canjeado);
+    const neto = num(row.neto);
+    const tasa_canje =
+      generado === 0 ? 0 : Math.round((canjeado / generado) * 100) / 100;
     return {
-      cafe_id,
-      cafe_nombre: cafesMap[cafe_id] ?? null,
-      movimientos: v.movimientos,
-      generado: v.generado,
-      canjeado: v.canjeado,
+      cafe_id: row.cafe_id ?? "",
+      cafe_nombre: row.cafeteria ?? null,
+      movimientos: num(row.movimientos),
+      generado,
+      canjeado,
       neto,
       tasa_canje,
+      image_code: row.image_code ?? null,
+      is_active: row.is_active ?? true,
     };
   });
 
@@ -481,12 +472,12 @@ export async function getAdminAlerts(limit = 20): Promise<AlertRow[]> {
 
 export async function getAdminCafeById(
   cafeId: string
-): Promise<{ id: string; name: string } | null> {
+): Promise<{ id: string; name: string; image_code?: string | null } | null> {
   await adminGuard();
   const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("cafes")
-    .select("id, name")
+    .select("id, name, image_code")
     .eq("id", cafeId)
     .maybeSingle();
   if (error) {
@@ -494,7 +485,8 @@ export async function getAdminCafeById(
     return null;
   }
   if (!data) return null;
-  return { id: (data as { id: string }).id, name: (data as { name?: string }).name ?? "" };
+  const d = data as { id: string; name?: string; image_code?: string | null };
+  return { id: d.id, name: d.name ?? "", image_code: d.image_code ?? null };
 }
 
 export type AdminProfileRow = {

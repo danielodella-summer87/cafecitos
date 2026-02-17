@@ -3,11 +3,28 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, CardTitle, CardSubtitle } from "@/app/ui/components";
-import { createCafe } from "@/app/actions/cafes";
+import { createCafe, updateCafe } from "@/app/actions/cafes";
 
 type Staff = {
   name: string;
   role: string;
+};
+
+type CafeFormMode = "create" | "edit";
+
+type InitialValues = {
+  id?: string;
+  name?: string;
+  city?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  instagram?: string;
+  description?: string;
+  hours_text?: string;
+  image_code?: string;
+  is_active?: boolean;
+  staff?: Staff[];
 };
 
 function pad2(s: string): string {
@@ -17,11 +34,15 @@ function pad2(s: string): string {
 }
 
 export default function CafeForm({
+  mode = "create",
   initialCode,
+  initialValues,
   onSave,
   onCancel,
 }: {
+  mode?: CafeFormMode;
   initialCode: string;
+  initialValues?: InitialValues;
   onSave: (data?: unknown) => void;
   onCancel: () => void;
 }) {
@@ -29,15 +50,19 @@ export default function CafeForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [city, setCity] = useState("");
-  const [address, setAddress] = useState("");
-  const [description, setDescription] = useState("");
+  const [name, setName] = useState(initialValues?.name ?? "");
+  const [phone, setPhone] = useState(initialValues?.phone ?? "");
+  const [city, setCity] = useState(initialValues?.city ?? "");
+  const [address, setAddress] = useState(initialValues?.address ?? "");
+  const [hoursText, setHoursText] = useState(initialValues?.hours_text ?? "");
+  const [description, setDescription] = useState(initialValues?.description ?? "");
 
-  const [staff, setStaff] = useState<Staff[]>([{ name: "", role: "Dueño/a" }]);
+  const [staff, setStaff] = useState<Staff[]>(
+    initialValues?.staff?.length ? initialValues.staff : [{ name: "", role: "Dueño/a" }]
+  );
 
   const canSave = name.trim().length >= 5 && !loading;
+  const primaryLabel = mode === "edit" ? "Guardar cambios" : "Guardar cafetería";
 
   function updateStaff(idx: number, field: keyof Staff, value: string) {
     const copy = [...staff];
@@ -56,23 +81,42 @@ export default function CafeForm({
     setLoading(true);
     try {
       const code = pad2(initialCode);
-      const cafe = await createCafe({
-        name: name.trim(),
-        city: city.trim() || undefined,
-        address: address.trim() || undefined,
-        phone: phone.trim() || undefined,
-        description: description.trim() || undefined,
-        image_code: code,
-        staff: staff
-          .filter((s) => s.name.trim() && s.role.trim())
-          .map((s, idx) => ({
-            name: s.name.trim(),
-            role: idx === 0 ? "Dueño/a" : s.role.trim(),
-            is_owner: idx === 0,
-          })),
-      });
-      onSave(cafe);
-      router.push(`/app/admin/cafes/${cafe.id}`);
+      const staffPayload = staff
+        .filter((s) => s.name.trim() && s.role.trim())
+        .map((s, idx) => ({
+          name: s.name.trim(),
+          role: idx === 0 ? "Dueño/a" : s.role.trim(),
+          is_owner: idx === 0,
+        }));
+
+      if (mode === "edit" && initialValues?.id) {
+        await updateCafe({
+          id: initialValues.id,
+          name: name.trim(),
+          city: city.trim() || undefined,
+          address: address.trim() || undefined,
+          phone: phone.trim() || undefined,
+          hours_text: hoursText.trim() || undefined,
+          description: description.trim() || undefined,
+          image_code: code,
+          is_active: initialValues.is_active ?? true,
+          staff: staffPayload,
+        });
+        onSave();
+      } else {
+        const cafe = await createCafe({
+          name: name.trim(),
+          city: city.trim() || undefined,
+          address: address.trim() || undefined,
+          phone: phone.trim() || undefined,
+          hours_text: hoursText.trim() || undefined,
+          description: description.trim() || undefined,
+          image_code: code,
+          staff: staffPayload,
+        });
+        onSave(cafe);
+        router.push(`/app/admin/cafes/${cafe.id}`);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al guardar");
     } finally {
@@ -111,6 +155,12 @@ export default function CafeForm({
           placeholder="Dirección"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
+        />
+        <input
+          className="input"
+          placeholder="Horario (ej: Lun–Vie 8–19 / Sáb 9–13)"
+          value={hoursText}
+          onChange={(e) => setHoursText(e.target.value)}
         />
         <input
           className="input"
@@ -160,7 +210,7 @@ export default function CafeForm({
           type="button"
           onClick={handleSave}
         >
-          {loading ? "Guardando…" : "Guardar cafetería"}
+          {loading ? "Guardando…" : primaryLabel}
         </Button>
         <Button variant="ghost" type="button" onClick={onCancel} disabled={loading}>
           Cancelar

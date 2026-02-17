@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { KpisSummaryRow, CafeKpiRow, DailyKpiRow, TopClienteGlobalRow, AlertRow, PanelClienteGlobalRow } from "@/app/actions/adminReports";
+import AppName from "@/app/ui/AppName";
 
 function fmtInt(n: unknown) {
   const num = Number(n ?? 0);
@@ -14,7 +15,7 @@ function KpiCard({
   value,
   subtitle,
 }: {
-  title: string;
+  title: React.ReactNode;
   value: string;
   subtitle?: string;
 }) {
@@ -232,7 +233,7 @@ export default function ReportesPanelClient({
               subtitle={`Earn: ${fmtInt(k.earn_30d)} · Redeem: ${fmtInt(k.redeem_30d)}`}
             />
             <KpiCard
-              title="Cafecitos netos (30d)"
+              title={<><AppName /> netos (30d)</>}
               value={fmtInt(k.neto_30d)}
               subtitle={`Generado: ${fmtInt(k.generado_30d)} · Canjeado: ${fmtInt(k.canjeado_30d)}`}
             />

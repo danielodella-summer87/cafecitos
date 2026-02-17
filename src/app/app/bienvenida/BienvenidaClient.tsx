@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { markWelcomeSeen } from "@/app/actions/onboarding";
+import AppName from "@/app/ui/AppName";
 
 export default function BienvenidaClient() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export default function BienvenidaClient() {
 
   return (
     <div className="mx-auto max-w-xl px-5 py-10">
-      <h1 className="text-3xl font-semibold tracking-tight">👋 Bienvenido a Cafecitos</h1>
+      <h1 className="text-3xl font-semibold tracking-tight">👋 Bienvenido a <AppName /></h1>
       <p className="mt-2 text-neutral-600">Te contamos en 30 segundos cómo funciona.</p>
 
       <div className="mt-8 space-y-4">

@@ -5,6 +5,7 @@ import {
   getAdminCafeById,
   getAdminCafeDetailKpis,
 } from "@/app/actions/adminReports";
+import CafeName from "@/app/ui/CafeName";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -37,7 +38,9 @@ export default async function AdminCafeDetailPage({ params }: Props) {
       </div>
 
       <div className="bg-white rounded-xl shadow p-6">
-        <h1 className="text-2xl font-semibold mb-2">☕ {cafe.name || "Cafetería"}</h1>
+        <h2 className="text-xl font-semibold mb-2">
+          <CafeName cafe={cafe} />
+        </h2>
         <p className="text-sm text-gray-500 mb-6">ID: <span className="font-mono">{cafe.id}</span></p>
 
         <h2 className="text-lg font-medium mb-3">Métricas últimos 30 días</h2>

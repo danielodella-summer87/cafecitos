@@ -5,7 +5,7 @@ import { getSession } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import {
   getAdminKpisSummary,
-  getAdminCafeKpis,
+  getAdminCafeKpis30d,
   getAdminDailyKpis,
   getAdminTopClientesGlobal,
   getAdminAlerts,
@@ -30,7 +30,7 @@ export default async function AdminReportesPage() {
   if (!session || session.role !== "admin") redirect("/login");
 
   let kpisSummary: KpisSummaryRow = defaultKpisSummary;
-  let cafesReport: Awaited<ReturnType<typeof getAdminCafeKpis>> = [];
+  let cafesReport: Awaited<ReturnType<typeof getAdminCafeKpis30d>> = [];
   let daily: Awaited<ReturnType<typeof getAdminDailyKpis>> = [];
   let topClientesGlobal: Awaited<ReturnType<typeof getAdminTopClientesGlobal>> = [];
   let alerts: Awaited<ReturnType<typeof getAdminAlerts>> = [];
@@ -40,7 +40,7 @@ export default async function AdminReportesPage() {
   try {
     const [k, c, d, t, a, p] = await Promise.all([
       getAdminKpisSummary(30),
-      getAdminCafeKpis(30),
+      getAdminCafeKpis30d(),
       getAdminDailyKpis(30),
       getAdminTopClientesGlobal(50),
       getAdminAlerts(20),

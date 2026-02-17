@@ -24,7 +24,7 @@ export function PageHeader({
   subtitle,
   rightSlot,
 }: {
-  title: string;
+  title: React.ReactNode;
   subtitle?: string;
   rightSlot?: React.ReactNode;
 }) {
@@ -50,7 +50,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-[1rem] border bg-[#FFFFFF] p-5 shadow-[0_1px_2px_0_rgb(0_0_0/0.05)] transition-shadow hover:shadow-[0_4px_6px_-1px_rgb(0_0_0/0.07),0_2px_4px_-2px_rgb(0_0_0/0.05)] ${className}`}
+      className={`rounded-[1rem] border !bg-[#F6EFE6] p-5 shadow-[0_1px_2px_0_rgb(0_0_0/0.05)] transition-shadow hover:shadow-[0_4px_6px_-1px_rgb(0_0_0/0.07),0_2px_4px_-2px_rgb(0_0_0/0.05)] ${className}`}
       style={{ borderColor: theme.colors.border }}
     >
       {children}
@@ -70,16 +70,16 @@ type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type ButtonSize = "sm" | "md" | "lg";
 
 const buttonBase =
-  "inline-flex items-center justify-center font-medium transition-all rounded-[0.75rem] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#C0841A]/40";
+  "inline-flex items-center justify-center font-semibold transition-colors duration-150 rounded-[0.75rem] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500/40";
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
-    "bg-[#111827] text-white hover:bg-[#1f2937] focus:ring-[#111827] active:scale-[0.98]",
+    "bg-red-600 text-white hover:bg-red-700 active:bg-red-800 border border-red-600",
   secondary:
-    "border border-[rgba(15,23,42,0.10)] bg-white text-[#0F172A] hover:bg-[#F8FAFC] focus:ring-[#64748B]",
+    "bg-red-600 text-white hover:bg-red-700 active:bg-red-800 border border-red-600",
   ghost:
-    "text-[#0F172A] hover:bg-[#F1F5F9] focus:ring-[#64748B]",
+    "bg-transparent text-red-600 hover:bg-red-50",
   danger:
-    "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 active:scale-[0.98]",
+    "bg-red-600 text-white hover:bg-red-700 active:bg-red-800 border border-red-600",
 };
 const buttonSizes: Record<ButtonSize, string> = {
   sm: "px-3 py-1.5 text-sm",

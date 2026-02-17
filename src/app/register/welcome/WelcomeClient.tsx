@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { PRO } from "@/lib/ui/pro";
+import AppName from "@/app/ui/AppName";
 
 export default function WelcomeClient(props: {
   name: string;
@@ -28,7 +29,7 @@ export default function WelcomeClient(props: {
               className="h-12 w-auto"
             />
             <div className="min-w-0">
-              <div className="text-sm text-neutral-500">Cafecitos</div>
+              <div className="text-sm text-neutral-500"><AppName /></div>
               <h1 className="text-2xl font-semibold text-neutral-900 truncate">
                 {displayName}
               </h1>
