@@ -795,17 +795,18 @@ export async function getAdminPanelClientesGlobal(): Promise<PanelClienteGlobalR
   const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("v_panel_clientes_global")
-    .select("cliente_id, cliente, cafe_preferida_id, cafeteria_preferida, movimientos, generado, canjeado, neto")
-    .order("neto", { ascending: false })
-    .order("movimientos", { ascending: false });
+    .select("*");
 
   if (error) {
-    console.error("getAdminPanelClientesGlobal supabase error:", error);
+    const errAny: any = error;
+    const full = JSON.stringify(errAny, Object.getOwnPropertyNames(errAny));
+    console.error("getAdminPanelClientesGlobal supabase error:", errAny, full);
     throw new Error(
-      `getAdminPanelClientesGlobal: message=${error.message} code=${(error as any).code ?? ""} details=${(error as any).details ?? ""} hint=${(error as any).hint ?? ""}`
+      `getAdminPanelClientesGlobal: message=${errAny?.message ?? ""} code=${errAny?.code ?? ""} details=${errAny?.details ?? ""} hint=${errAny?.hint ?? ""} full=${full}`
     );
   }
-  const rows = (data ?? []) as PanelClienteGlobalRow[];
+  const rows = (data ?? []) as any[];
+  rows.sort((a, b) => Number(b?.neto ?? 0) - Number(a?.neto ?? 0));
   return rows;
 }
 
