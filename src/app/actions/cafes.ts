@@ -87,17 +87,36 @@ export async function createCafe(
 
   if (cafeErr) throw new Error(`createCafe insert cafes: ${cafeErr.message}`);
 
-  const normalizedStaff = staff.map((s, idx) => ({
+  const staffRows = staff.map((p, idx) => ({
     cafe_id: cafe.id,
-    name: s.name,
-    role: idx === 0 ? "Dueño/a" : s.role,
-    is_owner: idx === 0 ? true : s.is_owner,
+    full_name: (p.name ?? "").trim(),
+    role: (p.role ?? "").trim(),
+    is_owner: idx === 0,
     can_issue: true,
     can_redeem: true,
+    is_active: true,
   }));
 
-  const { error: staffErr } = await sb.from("cafe_staff").insert(normalizedStaff);
-  if (staffErr) throw new Error(`createCafe insert cafe_staff: ${staffErr.message}`);
+  // Insert staff (intenta con can_issue/can_redeem; si la tabla no las tiene, fallback)
+  const { error: staffErr } = await sb.from("cafe_staff").insert(staffRows);
+
+  if (staffErr) {
+    const msg = (staffErr as any)?.message ?? "";
+
+    const looksLikeMissingCols =
+      msg.includes("Could not find the 'can_issue' column") ||
+      msg.includes("Could not find the 'can_redeem' column");
+
+    if (!looksLikeMissingCols) {
+      throw new Error(`createCafe insert cafe_staff: ${msg}`);
+    }
+
+    // fallback: insertar sin can_issue/can_redeem
+    const fallbackStaff = staffRows.map(({ can_issue, can_redeem, ...rest }) => rest);
+
+    const { error: staffErr2 } = await sb.from("cafe_staff").insert(fallbackStaff);
+    if (staffErr2) throw new Error(`createCafe insert cafe_staff (fallback): ${(staffErr2 as any)?.message ?? ""}`);
+  }
 
   return cafe as { id: string; name: string; image_code: string };
 }
