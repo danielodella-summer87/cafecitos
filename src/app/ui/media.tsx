@@ -78,17 +78,18 @@ export function PromoCard({
                   const label = typeof c === "object" && c && "name" in c ? c.name : String(c);
                   const idOrName = typeof c === "object" && c && "id" in c ? (c as { id: string }).id : label;
                   const clickable = Boolean(onOpenCafe);
+                  const safeIdOrName = (idOrName ?? "").toString().trim();
+                  const canClick = Boolean(clickable && safeIdOrName && onOpenCafe);
                   const Wrapper = clickable ? "button" : "span";
+                  const chipClass =
+                    "inline-flex items-center rounded-full border border-[rgba(15,23,42,0.15)] bg-white/70 px-2.5 py-1 text-xs text-[#0F172A] transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-1 " +
+                    (clickable ? "cursor-pointer hover:bg-white/90" : "cursor-default");
                   return (
                     <Wrapper
                       key={key}
                       type={clickable ? "button" : undefined}
-                      onClick={
-                        clickable && idOrName
-                          ? () => onOpenCafe?.(idOrName)
-                          : undefined
-                      }
-                      className={`inline-flex items-center rounded-full border border-[rgba(15,23,42,0.15)] bg-white/70 px-2.5 py-1 text-xs text-[#0F172A] transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-1 ${clickable ? "cursor-pointer hover:bg-white/90" : "cursor-default"}`}
+                      onClick={canClick ? () => onOpenCafe!(safeIdOrName) : undefined}
+                      className={chipClass}
                     >
                       {label}
                     </Wrapper>
