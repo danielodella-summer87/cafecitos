@@ -64,7 +64,7 @@ export default function CafeInfoModal({ open, cafeId, onClose }: CafeInfoModalPr
     const result = await upsertCafeReview({ cafe_id: cafeId, rating, comment });
     setSavingReview(false);
     if (result.ok && data) {
-      const { data: fresh } = await getCafePublicInfo(cafeId);
+      const fresh = await getCafePublicInfo(cafeId);
       if (fresh) setData(fresh);
     }
   }
