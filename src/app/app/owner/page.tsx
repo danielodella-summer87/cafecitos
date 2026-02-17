@@ -21,13 +21,13 @@ export default async function OwnerPage() {
 
   const cafeId = session.cafeId ?? null;
   const { data: myCafe } = cafeId
-    ? await supabase.from("cafes").select("id, name").eq("id", cafeId).single()
+    ? await supabase.from("cafes").select("id, name, image_code").eq("id", cafeId).single()
     : { data: null };
 
   return (
     <OwnerPanelClient
       me={{ full_name: profile?.full_name ?? session.fullName ?? null, cedula: profile?.cedula ?? "" }}
-      myCafe={myCafe ? { name: myCafe.name } : null}
+      myCafe={myCafe ? { name: myCafe.name, image_code: myCafe.image_code ?? null } : null}
     />
   );
 }

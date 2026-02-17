@@ -1,9 +1,15 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { logout } from "@/app/actions/logout";
 import { ownerAddCafecitos } from "@/app/actions/owner";
 import { ownerRedeemCafecitos } from "@/app/actions/ownerRedeem";
+import {
+  getOwnerCafeEmployeeOptions,
+  getOwnerCafeTransactions,
+  type OwnerEmployeeOption,
+  type OwnerTxRow,
+} from "@/app/actions/ownerTransactions";
 import { ownerGetConsumerSummary } from "@/app/actions/ownerSummary";
 import { getTxMeta } from "@/lib/ui/txLabels";
 import { PRO } from "@/lib/ui/pro";
@@ -21,7 +27,7 @@ type LookupState = {
 
 type Props = {
   me: { full_name: string | null; cedula: string };
-  myCafe: { name: string } | null;
+  myCafe: { name: string; image_code?: string | number | null } | null;
 };
 
 function CafecitosLabel({ children }: { children: React.ReactNode }) {
@@ -65,6 +71,18 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
   const [openAdd, setOpenAdd] = useState(false);
   const [openRedeem, setOpenRedeem] = useState(false);
   const [openLast, setOpenLast] = useState(false);
+
+  const [tab, setTab] = useState<"atender" | "historial">("atender");
+  const [historialDays, setHistorialDays] = useState(30);
+  const [historialType, setHistorialType] = useState<"all" | "earn" | "redeem">("all");
+  const [historialEmployeeId, setHistorialEmployeeId] = useState<string>("");
+  const [historialCedula, setHistorialCedula] = useState("");
+  const [historialRows, setHistorialRows] = useState<OwnerTxRow[]>([]);
+  const [historialTotalCount, setHistorialTotalCount] = useState(0);
+  const [historialOffset, setHistorialOffset] = useState(0);
+  const [historialLoading, setHistorialLoading] = useState(false);
+  const [historialSummary30d, setHistorialSummary30d] = useState<{ assigned: number; redeemed: number; net: number } | null>(null);
+  const [historialEmployeeOptions, setHistorialEmployeeOptions] = useState<OwnerEmployeeOption[]>([]);
 
   const canAssign = useMemo(() => {
     return (
@@ -187,6 +205,88 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
     cedulaInputRef.current?.focus();
   }
 
+  const loadHistorial = useCallback(
+    async (offsetOverride?: number) => {
+      setHistorialLoading(true);
+      try {
+        const res = await getOwnerCafeTransactions({
+          days: historialDays,
+          type: historialType,
+          employeeId: historialEmployeeId || undefined,
+          searchCedula: historialCedula.trim() || undefined,
+          limit: 25,
+          offset: offsetOverride ?? historialOffset,
+        });
+        if (res) {
+          if (offsetOverride === 0 || (offsetOverride ?? historialOffset) === 0) {
+            setHistorialRows(res.rows);
+            setHistorialOffset(25);
+          } else {
+            setHistorialRows((prev) => [...prev, ...res.rows]);
+            setHistorialOffset((o) => o + 25);
+          }
+          setHistorialTotalCount(res.totalCount);
+          if (res.summary30d) setHistorialSummary30d(res.summary30d);
+        }
+      } finally {
+        setHistorialLoading(false);
+      }
+    },
+    [historialDays, historialType, historialEmployeeId, historialCedula, historialOffset]
+  );
+
+  const applyHistorialFilters = useCallback(() => {
+    setHistorialOffset(0);
+    loadHistorial(0);
+  }, [loadHistorial]);
+
+  useEffect(() => {
+    if (tab === "historial" && historialEmployeeOptions.length === 0) {
+      getOwnerCafeEmployeeOptions().then((opts) => {
+        if (opts) setHistorialEmployeeOptions(opts);
+      });
+    }
+  }, [tab, historialEmployeeOptions.length]);
+
+  useEffect(() => {
+    if (tab === "historial" && historialRows.length === 0 && !historialLoading) {
+      loadHistorial(0);
+    }
+  }, [tab]);
+
+  const formatDate = (iso: string) =>
+    new Intl.DateTimeFormat("es-UY", { dateStyle: "short", timeStyle: "short" }).format(new Date(iso));
+
+  const exportHistorialXls = useCallback(() => {
+    const headers = ["Tipo", "Cantidad", "Cliente (cédula)", "Cliente (nombre)", "Empleado", "Fecha/hora"];
+    const escape = (s: string) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const rows = historialRows.map((r) => [
+      r.tx_type === "earn" ? "Asignado" : "Cobrado",
+      r.tx_type === "earn" ? `+${r.amount}` : `-${r.amount}`,
+      r.client_cedula ?? "",
+      r.client_name ?? "",
+      r.employee_name ?? "",
+      formatDate(r.created_at),
+    ]);
+    const tableRows = [
+      "<tr>" + headers.map((h) => `<th>${escape(h)}</th>`).join("") + "</tr>",
+      ...rows.map((row) => "<tr>" + row.map((c) => `<td>${escape(String(c))}</td>`).join("") + "</tr>"),
+    ].join("");
+    const html =
+      "<html xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:x=\"urn:schemas-microsoft-com:office:excel\">" +
+      "<head><meta charset=\"UTF-8\"/><style>table{border-collapse:collapse;} th,td{border:1px solid #333;padding:4px 8px;}</style></head>" +
+      "<body><table>" +
+      tableRows +
+      "</table></body></html>";
+    const blob = new Blob(["\uFEFF" + html], { type: "application/vnd.ms-excel" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `historial-cafecitos-${new Date().toISOString().slice(0, 10)}.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [historialRows]);
+
   return (
     <div className={PRO.page}>
       <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
@@ -202,9 +302,210 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
         </form>
       </div>
       <p className="mt-2 text-3xl font-semibold text-red-500">
-        {me.full_name || me.cedula} · ☕ {myCafe?.name || "Cafetería sin nombre"}
+        {myCafe
+          ? `${String(myCafe.image_code ?? "").padStart(2, "0")} - ${myCafe.name || "Cafetería sin nombre"}`
+          : "Cafetería sin nombre"}
       </p>
 
+      <div className="flex gap-2 border-b border-neutral-200 mb-4">
+        <button
+          type="button"
+          onClick={() => setTab("atender")}
+          className={`px-4 py-2 font-medium rounded-t-md transition-colors ${tab === "atender" ? "bg-red-600 text-white" : "bg-[#F6EFE6] text-neutral-700 hover:bg-neutral-200"}`}
+        >
+          Gestión
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("historial")}
+          className={`px-4 py-2 font-medium rounded-t-md transition-colors ${tab === "historial" ? "bg-red-600 text-white" : "bg-[#F6EFE6] text-neutral-700 hover:bg-neutral-200"}`}
+        >
+          Historial
+        </button>
+      </div>
+
+      {tab === "historial" && (
+        <div className="rounded-xl border border-neutral-200 bg-[#F6EFE6] p-4 space-y-4">
+          {historialSummary30d != null && (
+            <div className="rounded-lg border border-neutral-200 bg-white/80 p-3 text-sm">
+              <span className="font-medium">Últimos 30 días:</span>{" "}
+              <span className="text-green-700">Asignados {historialSummary30d.assigned}</span>
+              {" | "}
+              <span className="text-red-600">Cobrados {historialSummary30d.redeemed}</span>
+              {" | "}
+              <span className="font-semibold">Neto {historialSummary30d.net}</span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {[7, 30, 90].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => {
+                  setHistorialDays(d);
+                  setHistorialOffset(0);
+                  setHistorialLoading(true);
+                  getOwnerCafeTransactions({
+                    days: d,
+                    type: historialType,
+                    employeeId: historialEmployeeId || undefined,
+                    searchCedula: historialCedula.trim() || undefined,
+                    limit: 25,
+                    offset: 0,
+                  }).then((res) => {
+                    if (res) {
+                      setHistorialRows(res.rows);
+                      setHistorialTotalCount(res.totalCount);
+                      if (res.summary30d) setHistorialSummary30d(res.summary30d);
+                      setHistorialOffset(25);
+                    }
+                  }).finally(() => setHistorialLoading(false));
+                }}
+                className={`rounded-full px-3 py-1 text-sm ${historialDays === d ? "bg-red-600 text-white" : "bg-white border border-neutral-300 hover:bg-neutral-100"}`}
+              >
+                {d === 7 ? "7 días" : d === 30 ? "30 días" : "90 días"}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">Tipo</label>
+              <select
+                value={historialType}
+                onChange={(e) => setHistorialType(e.target.value as "all" | "earn" | "redeem")}
+                className="w-full border rounded-lg px-3 py-2 bg-white"
+              >
+                <option value="all">Todos</option>
+                <option value="earn">Asignados</option>
+                <option value="redeem">Cobrados</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Empleado</label>
+              <select
+                value={historialEmployeeId}
+                onChange={(e) => setHistorialEmployeeId(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 bg-white"
+              >
+                <option value="">Todos</option>
+                {historialEmployeeOptions.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.full_name ?? emp.id.slice(0, 8)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Cédula cliente</label>
+              <input
+                type="text"
+                value={historialCedula}
+                onChange={(e) => setHistorialCedula(e.target.value)}
+                placeholder="Buscar por cédula"
+                className="w-full border rounded-lg px-3 py-2"
+              />
+            </div>
+            <div className="flex flex-wrap items-end gap-2 w-full md:w-auto">
+              <button
+                type="button"
+                onClick={applyHistorialFilters}
+                disabled={historialLoading}
+                className="w-full sm:w-auto min-w-0 rounded-lg px-4 py-2 bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                {historialLoading ? "Cargando…" : "Buscar"}
+              </button>
+              {historialRows.length > 0 && (
+                <button
+                  type="button"
+                  onClick={exportHistorialXls}
+                  className="w-full sm:w-auto min-w-0 rounded-lg px-4 py-2 border border-red-600 text-red-600 font-medium hover:bg-red-50"
+                >
+                  Exportar XLS
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full hidden md:table text-left text-sm">
+              <thead>
+                <tr className="border-b border-neutral-300">
+                  <th className="p-2 font-medium">Tipo</th>
+                  <th className="p-2 font-medium">Cantidad</th>
+                  <th className="p-2 font-medium">Cliente</th>
+                  <th className="p-2 font-medium">Empleado</th>
+                  <th className="p-2 font-medium">Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historialRows.map((r) => (
+                  <tr key={r.id} className="border-b border-neutral-200">
+                    <td className="p-2">
+                      <span
+                        className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${r.tx_type === "earn" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
+                      >
+                        {r.tx_type === "earn" ? "Asignado" : "Cobrado"}
+                      </span>
+                    </td>
+                    <td className={`p-2 font-semibold ${r.tx_type === "earn" ? "text-green-700" : "text-red-700"}`}>
+                      {r.tx_type === "earn" ? "+" : "-"}
+                      {r.amount}
+                    </td>
+                    <td className="p-2">
+                      {[r.client_cedula, r.client_name].filter(Boolean).join(" — ") || "—"}
+                    </td>
+                    <td className="p-2">{r.employee_name ?? "—"}</td>
+                    <td className="p-2 text-neutral-600">{formatDate(r.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="md:hidden space-y-2">
+              {historialRows.map((r) => (
+                <div
+                  key={r.id}
+                  className="rounded-lg border border-neutral-200 bg-white p-3 shadow-sm"
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <span
+                      className={`rounded px-2 py-0.5 text-xs font-medium ${r.tx_type === "earn" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
+                    >
+                      {r.tx_type === "earn" ? "Asignado" : "Cobrado"}
+                    </span>
+                    <span className={`font-semibold ${r.tx_type === "earn" ? "text-green-700" : "text-red-700"}`}>
+                      {r.tx_type === "earn" ? "+" : "-"}
+                      {r.amount}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm">
+                    <span className="text-neutral-500">Cliente:</span> {[r.client_cedula, r.client_name].filter(Boolean).join(" — ") || "—"}
+                  </div>
+                  <div className="text-sm">
+                    <span className="text-neutral-500">Empleado:</span> {r.employee_name ?? "—"}
+                  </div>
+                  <div className="text-xs text-neutral-500 mt-1">{formatDate(r.created_at)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {historialRows.length === 0 && !historialLoading && (
+            <p className="text-center text-neutral-500 py-6">No hay movimientos con los filtros elegidos.</p>
+          )}
+          {historialRows.length < historialTotalCount && historialRows.length > 0 && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={() => loadHistorial()}
+                disabled={historialLoading}
+                className="rounded-lg px-4 py-2 bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                {historialLoading ? "Cargando…" : "Cargar más"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "atender" && (
       <div className="border rounded-xl p-4 space-y-3">
         <label className="block text-sm font-medium">Cédula del cliente</label>
         <input
@@ -512,6 +813,7 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
 
         {consumer && status && <div className="text-sm">{status}</div>}
       </div>
+      )}
     </div>
   </div>
   );
