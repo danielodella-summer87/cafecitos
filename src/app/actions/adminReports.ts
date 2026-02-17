@@ -800,8 +800,10 @@ export async function getAdminPanelClientesGlobal(): Promise<PanelClienteGlobalR
     .order("movimientos", { ascending: false });
 
   if (error) {
-    console.error("getAdminPanelClientesGlobal", error);
-    return [];
+    console.error("getAdminPanelClientesGlobal supabase error:", error);
+    throw new Error(
+      `getAdminPanelClientesGlobal: message=${error.message} code=${(error as any).code ?? ""} details=${(error as any).details ?? ""} hint=${(error as any).hint ?? ""}`
+    );
   }
   const rows = (data ?? []) as PanelClienteGlobalRow[];
   return rows;
