@@ -34,6 +34,7 @@ type Props = {
   topClientesGlobal: TopClienteGlobalRow[];
   alerts: AlertRow[];
   panelClientesGlobal: PanelClienteGlobalRow[];
+  reportesLoadError?: boolean;
 };
 
 export default function ReportesPanelClient({
@@ -43,6 +44,7 @@ export default function ReportesPanelClient({
   topClientesGlobal: tops,
   alerts: al,
   panelClientesGlobal: panelClientes = [],
+  reportesLoadError = false,
 }: Props) {
   const [tab, setTab] = useState<"clientes" | "cafeterias">("clientes");
 
@@ -56,6 +58,12 @@ export default function ReportesPanelClient({
           ← Volver a Admin
         </Link>
       </div>
+
+      {reportesLoadError ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+          ⚠️ No se pudieron cargar los reportes (ver logs).
+        </div>
+      ) : null}
 
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
@@ -306,7 +314,7 @@ export default function ReportesPanelClient({
                   <tr key={r.cafe_id} className="border-t">
                     <td className="p-3 font-medium">
                       <Link
-                        href={`/app/admin/reportes/cafe/${r.cafe_id}`}
+                        href={`/app/admin/cafes/${r.cafe_id}`}
                         className="hover:underline text-blue-600"
                       >
                         {r.cafe_nombre ?? "—"}

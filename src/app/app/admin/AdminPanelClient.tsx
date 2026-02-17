@@ -16,6 +16,7 @@ import {
   type AdminTier,
   type AdminReward,
 } from "@/app/actions/adminPro";
+import { logout } from "@/app/actions/logout";
 
 type Props = {
   initialSettings: AdminSettings | null;
@@ -89,9 +90,16 @@ export default function AdminPanelClient(props: Props) {
   return (
     <div className={PRO.page}>
       <div className="mx-auto max-w-6xl px-4 py-8 space-y-6">
-        <div className="flex items-center gap-4">
-          <Image src="/logoamorperfecto.png" alt="Amor Perfecto" width={40} height={40} className="h-10 w-auto" />
-          <h1 className="text-3xl font-semibold">Panel Admin</h1>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-4">
+            <Image src="/logoamorperfecto.png" alt="Amor Perfecto" width={40} height={40} className="h-10 w-auto" />
+            <h1 className="text-3xl font-semibold">Panel Admin</h1>
+          </div>
+          <form action={logout}>
+            <button type="submit" className="px-4 py-2 rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium">
+              Salir
+            </button>
+          </form>
         </div>
 
         <div className="flex gap-2 flex-wrap items-center">
@@ -99,7 +107,6 @@ export default function AdminPanelClient(props: Props) {
           <Link href="/app/admin/niveles" className="px-4 py-2 rounded-md border bg-white hover:bg-neutral-50 text-neutral-700 no-underline">
             Niveles
           </Link>
-          <button className={`px-4 py-2 rounded-md border ${tab === "rewards" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("rewards")}>Beneficios</button>
           <button className={`px-4 py-2 rounded-md border ${tab === "profiles" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("profiles")}>Socios</button>
           <button className={`px-4 py-2 rounded-md border ${tab === "cafes" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("cafes")}>Cafeterías</button>
           <Link href="/app/admin/reportes" className="px-4 py-2 rounded-md border bg-white hover:bg-neutral-50 text-neutral-700">
@@ -447,16 +454,23 @@ export default function AdminPanelClient(props: Props) {
                   {profiles.map((p) => (
                     <tr key={p.id} className="border-t">
                       <td className="p-3 font-medium">
-                        <Link
-                          href={
-                            p.role === "owner"
-                              ? `/app/admin/cafeterias/${p.id}`
-                              : `/app/admin/clientes/${p.id}`
-                          }
-                          className="text-gray-900 hover:text-amber-600 hover:underline transition"
-                        >
-                          {p.full_name ?? "(sin nombre)"}
-                        </Link>
+                        {p.role === "owner" && p.cafe_id ? (
+                          <Link
+                            href={`/app/admin/cafes/${p.cafe_id}`}
+                            className="text-gray-900 hover:text-amber-600 hover:underline transition"
+                          >
+                            {p.full_name ?? "(sin nombre)"}
+                          </Link>
+                        ) : p.role === "consumer" || !p.cafe_id ? (
+                          <Link
+                            href={`/app/admin/clientes/${p.id}`}
+                            className="text-gray-900 hover:text-amber-600 hover:underline transition"
+                          >
+                            {p.full_name ?? "(sin nombre)"}
+                          </Link>
+                        ) : (
+                          <span>{p.full_name ?? "(sin nombre)"}</span>
+                        )}
                       </td>
                       <td className="p-3">{p.cedula}</td>
                       <td className="p-3">{p.role}</td>

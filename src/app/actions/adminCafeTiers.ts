@@ -26,7 +26,10 @@ export async function getAdminCafeTiers(): Promise<CafeTierRow[]> {
     .select("id,name,min_total_points,badge_color,created_at,updated_at")
     .order("min_total_points", { ascending: true });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getAdminCafeTiers", error);
+    return [];
+  }
   return (data ?? []) as CafeTierRow[];
 }
 
@@ -51,12 +54,18 @@ export async function upsertAdminCafeTier(input: {
     .from("cafe_tiers")
     .upsert(payload, { onConflict: "id" });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("upsertAdminCafeTier", error);
+    throw new Error(error.message);
+  }
 }
 
 export async function deleteAdminCafeTier(id: string) {
   await adminGuard();
   const supabase = supabaseAdmin();
   const { error } = await supabase.from("cafe_tiers").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("deleteAdminCafeTier", error);
+    throw new Error(error.message);
+  }
 }

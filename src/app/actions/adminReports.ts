@@ -117,7 +117,10 @@ export async function getAdminCafeKpis(days = 30): Promise<CafeKpiRow[]> {
     .not("cafe_id", "is", null)
     .gte("created_at", sinceIso);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getAdminCafeKpis", error);
+    return [];
+  }
 
   const cafesIds = [...new Set((txs ?? []).map((t) => t.cafe_id).filter(Boolean))] as string[];
   const cafesMap: Record<string, string> = {};
@@ -169,7 +172,10 @@ export async function getAdminTopCustomers(limit = 50): Promise<TopCustomerRow[]
     .from("point_transactions")
     .select("cafe_id, from_profile_id, to_profile_id, amount");
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getAdminTopCustomers", error);
+    return [];
+  }
 
   const cafesIds = [...new Set((txs ?? []).map((t) => t.cafe_id).filter(Boolean))] as string[];
   const cafesMap: Record<string, string> = {};
@@ -231,7 +237,10 @@ export async function getAdminDailyKpis(days = 30): Promise<DailyKpiRow[]> {
     .select("from_profile_id, to_profile_id, amount, created_at")
     .gte("created_at", sinceIso);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getAdminDailyKpis", error);
+    return [];
+  }
 
   const byDate: Record<string, { movimientos: number; generado: number; canjeado: number }> = {};
 
@@ -269,7 +278,19 @@ export async function getAdminKpisSummary(days = 30): Promise<KpisSummaryRow> {
     .select("cafe_id, to_profile_id, from_profile_id, amount, tx_type")
     .gte("created_at", sinceIso);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getAdminKpisSummary", error);
+    return {
+      movimientos_30d: 0,
+      earn_30d: 0,
+      redeem_30d: 0,
+      generado_30d: 0,
+      canjeado_30d: 0,
+      neto_30d: 0,
+      cafes_activas_30d: 0,
+      clientes_activos_30d: 0,
+    };
+  }
 
   const rows = txs ?? [];
   const movimientos_30d = rows.length;
@@ -319,7 +340,10 @@ export async function getAdminTopConsumers7d(limit = 20): Promise<TopConsumer7dR
     .select("to_profile_id, from_profile_id, amount, tx_type")
     .gte("created_at", sinceIso);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getAdminTopConsumers7d", error);
+    return [];
+  }
 
   const byProfile: Record<string, { movimientos: number; generado: number; canjeado: number }> = {};
 
@@ -394,6 +418,11 @@ export async function getAdminAlerts(limit = 20): Promise<AlertRow[]> {
       .lt("created_at", last7.toISOString()),
   ]);
 
+  if (res7.error || resPrev.error) {
+    console.error("getAdminAlerts", res7.error ?? resPrev.error);
+    return [];
+  }
+
   const byCafe7: Record<string, { mov: number; neto: number }> = {};
   for (const t of res7.data ?? []) {
     const cid = t.cafe_id ?? "";
@@ -460,7 +489,10 @@ export async function getAdminCafeById(
     .select("id, name")
     .eq("id", cafeId)
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getAdminCafeById", error);
+    return null;
+  }
   if (!data) return null;
   return { id: (data as { id: string }).id, name: (data as { name?: string }).name ?? "" };
 }
@@ -483,7 +515,10 @@ export async function getAdminProfileById(
     .select("id, full_name, cedula, role, tier_id")
     .eq("id", profileId)
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getAdminProfileById", error);
+    return null;
+  }
   if (!data) return null;
   const d = data as { id: string; full_name?: string; cedula?: string; role?: string; tier_id?: string };
   return {
@@ -511,7 +546,16 @@ export async function getAdminCafeDetailKpis(
     .eq("cafe_id", cafeId)
     .gte("created_at", sinceIso);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getAdminCafeDetailKpis", error);
+    return {
+      movimientos_30d: 0,
+      generado_30d: 0,
+      canjeado_30d: 0,
+      neto_30d: 0,
+      clientes_unicos_30d: 0,
+    };
+  }
 
   const rows = txs ?? [];
   let generado_30d = 0;
@@ -556,7 +600,10 @@ export async function getAdminCafeDailyKpis(
     .eq("cafe_id", cafeId)
     .gte("created_at", sinceIso);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getAdminCafeDailyKpis", error);
+    return [];
+  }
 
   const byDate: Record<string, { movimientos: number; generado: number; canjeado: number }> = {};
 
@@ -597,7 +644,10 @@ export async function getAdminCafeTopClients7d(
     .eq("cafe_id", cafeId)
     .gte("created_at", sinceIso);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getAdminCafeTopClients7d", error);
+    return [];
+  }
 
   const byProfile: Record<string, { movimientos: number; generado: number; canjeado: number }> = {};
 
@@ -664,7 +714,10 @@ export async function getAdminTopClientesGlobal(
     .not("cafe_id", "is", null)
     .not("to_profile_id", "is", null);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getAdminTopClientesGlobal", error);
+    return [];
+  }
 
   type Key = string;
   const byKey: Record<
@@ -746,7 +799,10 @@ export async function getAdminPanelClientesGlobal(): Promise<PanelClienteGlobalR
     .order("neto", { ascending: false })
     .order("movimientos", { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getAdminPanelClientesGlobal", error);
+    return [];
+  }
   const rows = (data ?? []) as PanelClienteGlobalRow[];
   return rows;
 }
@@ -779,7 +835,10 @@ export async function getClientTiers(): Promise<TierRow[]> {
     .from("tiers")
     .select("id,slug,name,min_points,badge_label,badge_message,dot_color,sort_order,is_active")
     .order("sort_order", { ascending: true });
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getClientTiers", error);
+    return [];
+  }
   return (data ?? []) as TierRow[];
 }
 
@@ -790,6 +849,9 @@ export async function getCafeTiers(): Promise<CafeTierRowNiveles[]> {
     .from("cafe_tiers")
     .select("id,name,min_total_points,badge_color,created_at")
     .order("min_total_points", { ascending: true });
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("getCafeTiers", error);
+    return [];
+  }
   return (data ?? []) as CafeTierRowNiveles[];
 }

@@ -35,7 +35,7 @@ export default function BienvenidaClient() {
   }, []);
 
   const continuar = () => {
-    router.replace("/app");
+    router.replace("/app/consumer");
   };
 
   return (
