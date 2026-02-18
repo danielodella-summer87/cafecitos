@@ -39,6 +39,18 @@ export async function getConsumerDashboard() {
   if (session.role !== "consumer") return null;
 
   const profileId = session.profileId;
+  if (!profileId) {
+    return {
+      profile: {
+        fullName: session.fullName ?? null,
+        profileId: session.profileId ?? null,
+      },
+      balance: 0,
+      earnedTotal: 0,
+      redeemedTotal: 0,
+      last: [],
+    };
+  }
   const supabase = supabaseAdmin();
 
   const { data: txs, error } = await supabase
