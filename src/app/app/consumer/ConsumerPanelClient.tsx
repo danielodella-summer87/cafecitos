@@ -98,6 +98,8 @@ export default function ConsumerPanelClient({ data, cafesList }: Props) {
     </form>
   );
 
+  const greeting = session?.fullName?.trim() ? `Hola, ${session.fullName.trim()}` : "Hola 👋";
+
   return (
     <main>
       <Container>
@@ -106,6 +108,7 @@ export default function ConsumerPanelClient({ data, cafesList }: Props) {
           subtitle="Tu universo de cafés, beneficios y experiencias."
           rightSlot={rightSlot}
         />
+        <p className="text-sm md:text-base text-slate-600 mt-1 mb-4">{greeting}</p>
 
         {/* Primera fila: 25% izquierda (Saldo, Nivel, Próximo beneficio, Generado) + 75% derecha (carrusel promos) */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
