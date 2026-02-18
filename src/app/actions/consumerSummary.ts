@@ -51,27 +51,44 @@ export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null
   const session = await getSession();
   if (!session || session.role !== "consumer") return null;
 
-  const profileId = session.profileId;
+  const safeProfileId = (session.profileId ?? "").toString();
+
+  if (!safeProfileId) {
+    return {
+      session: {
+        profileId: safeProfileId,
+        fullName: session.fullName ?? null,
+        role: session.role,
+      },
+      tierSlug: "starter",
+      balance: 0,
+      last10: [],
+      generatedTotal: 0,
+      redeemedTotal: 0,
+      cafesMap: {},
+    };
+  }
+
   const supabase = supabaseAdmin();
 
   const { data: txs, error } = await supabase
     .from("point_transactions")
     .select("id, tx_type, from_profile_id, to_profile_id, cafe_id, amount, note, created_at")
-    .or(`from_profile_id.eq.${profileId},to_profile_id.eq.${profileId}`)
+    .or(`from_profile_id.eq.${safeProfileId},to_profile_id.eq.${safeProfileId}`)
     .order("created_at", { ascending: false })
     .limit(200);
 
   if (error) throw error;
 
   const typed = (txs ?? []) as ConsumerTx[];
-  const balance = computeBalance(profileId, typed);
-  const tierSlug = await getCurrentUserTierSlug(profileId);
+  const balance = computeBalance(safeProfileId, typed);
+  const tierSlug = await getCurrentUserTierSlug(safeProfileId);
 
   const generatedTotal = typed
     .filter(
       (t) =>
         (t.tx_type === "earn" || t.tx_type === "adjust" || t.tx_type === "transfer_in") &&
-        t.to_profile_id === profileId
+        t.to_profile_id === safeProfileId
     )
     .reduce((sum, t) => sum + (t.amount ?? 0), 0);
 
@@ -79,7 +96,7 @@ export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null
     .filter(
       (t) =>
         (t.tx_type === "redeem" || t.tx_type === "transfer_out") &&
-        t.from_profile_id === profileId
+        t.from_profile_id === safeProfileId
     )
     .reduce((sum, t) => sum + (t.amount ?? 0), 0);
 
@@ -105,7 +122,7 @@ export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null
 
   return {
     session: {
-      profileId: session.profileId,
+      profileId: safeProfileId,
       fullName: session.fullName ?? null,
       role: session.role,
     },

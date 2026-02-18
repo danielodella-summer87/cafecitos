@@ -16,14 +16,16 @@ export default async function GuideDetailPage({ params }: Props) {
   const session = await getSession();
   if (!session) redirect("/login");
 
+  const safeProfileId = (session?.profileId ?? "").toString();
+
   const { id } = await params;
   const guideRes = await getCoffeeGuideById(id);
   if (!guideRes.ok) notFound();
   const { guide } = guideRes;
 
   const [tierSlug, views] = await Promise.all([
-    getCurrentUserTierSlug(session.profileId),
-    getCoffeeGuideViews(session.profileId),
+    getCurrentUserTierSlug(safeProfileId),
+    getCoffeeGuideViews(safeProfileId),
   ]);
 
   if (!canAccess(tierSlug, guide.min_tier_slug)) redirect("/app/universo-cafe");
@@ -52,7 +54,7 @@ export default async function GuideDetailPage({ params }: Props) {
               slug={slug ?? ""}
               contentJson={guide.content_json}
               guideId={guide.id}
-              profileId={session.profileId}
+              profileId={safeProfileId}
               initialProgress={initialProgress}
             />
           </div>
