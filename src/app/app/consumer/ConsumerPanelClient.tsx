@@ -20,6 +20,7 @@ import {
 import { PromoCard, CafeCard } from "@/app/ui/media";
 import AppName from "@/app/ui/AppName";
 import CafeInfoModal from "./CafeInfoModal";
+import LevelInfoModal from "./LevelInfoModal";
 
 const BENEFIT_TARGET = 100;
 
@@ -47,6 +48,7 @@ export default function ConsumerPanelClient({ data, cafesList }: Props) {
   const params = useSearchParams();
   const debug = params.get("debug") === "1";
   const [openCafeId, setOpenCafeId] = useState<string | null>(null);
+  const [openLevelInfo, setOpenLevelInfo] = useState(false);
 
   const { session, balance, last10, generatedTotal, redeemedTotal, cafesMap } = data;
   const missing = Math.max(0, BENEFIT_TARGET - balance);
@@ -122,7 +124,14 @@ export default function ConsumerPanelClient({ data, cafesList }: Props) {
                 <CardTitle>Tu nivel</CardTitle>
                 <div className="mt-3 flex items-center gap-2">
                   <span className={`h-2.5 w-2.5 rounded-full ${tier.dotClass}`} aria-hidden />
-                  <Badge variant="accent">{tier.name}</Badge>
+                  <button
+                    type="button"
+                    onClick={() => setOpenLevelInfo(true)}
+                    className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-1 rounded-full"
+                    aria-label={`Ver información del nivel ${tier.name}`}
+                  >
+                    <Badge variant="accent">{tier.name}</Badge>
+                  </button>
                 </div>
                 {next.nextName && next.remaining > 0 ? (
                   <div className="mt-2 text-sm text-slate-600">
@@ -245,6 +254,13 @@ export default function ConsumerPanelClient({ data, cafesList }: Props) {
             open={!!openCafeId}
             cafeId={openCafeId ?? ""}
             onClose={() => setOpenCafeId(null)}
+            isAdmin={data.session.role === "admin"}
+          />
+          <LevelInfoModal
+            open={openLevelInfo}
+            onClose={() => setOpenLevelInfo(false)}
+            level={tier.name}
+            points={balance}
           />
         </div>
 

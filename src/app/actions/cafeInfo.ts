@@ -3,6 +3,13 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
 
+export type CafeReviewItem = {
+  id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+};
+
 export type CafePublicInfo = {
   cafe: {
     id: string;
@@ -14,6 +21,7 @@ export type CafePublicInfo = {
     is_active: boolean;
   };
   reviewsStats: { avg_rating: number; reviews_count: number } | null;
+  reviews: CafeReviewItem[];
   promos: Array<{ promo_id: string; title: string; description: string | null; image_code: string | null }>;
 };
 
@@ -48,6 +56,19 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
     // vista puede no existir aún
   }
 
+  let reviews: CafeReviewItem[] = [];
+  try {
+    const { data: reviewsData } = await supabase
+      .from("cafe_reviews")
+      .select("id, rating, comment, created_at")
+      .eq("cafe_id", cafeId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    reviews = (reviewsData ?? []) as CafeReviewItem[];
+  } catch {
+    // tabla puede no existir
+  }
+
   let promos: CafePublicInfo["promos"] = [];
   try {
     const { data: promosData } = await supabase
@@ -62,6 +83,7 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
   return {
     cafe: cafe as CafePublicInfo["cafe"],
     reviewsStats,
+    reviews,
     promos,
   };
 }
@@ -73,6 +95,7 @@ export async function upsertCafeReview(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   const session = await getSession();
   if (!session) return { ok: false, error: "No autorizado" };
+  if (session.role === "admin") return { ok: false, error: "Solo clientes pueden calificar" };
 
   const rating = Math.round(Number(input.rating));
   if (rating < 1 || rating > 5) return { ok: false, error: "El rating debe ser entre 1 y 5" };

@@ -2,17 +2,25 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import Image from "next/image";
 import { Container, Button, Card, CardTitle, Badge } from "@/app/ui/components";
 import CafeName from "@/app/ui/CafeName";
 import { getNextImageCode } from "@/app/actions/cafes";
 import type { CafeListItem } from "@/app/actions/cafes";
 import CafeForm from "./CafeForm";
+import CafeInfoModal from "@/app/app/consumer/CafeInfoModal";
 
 const COVER_DEFAULT = "/media/cover-default.jpg";
 
-function CafeListCard({ cafe }: { cafe: CafeListItem }) {
+function CafeListCard({
+  cafe,
+  onOpenInfo,
+  onEdit,
+}: {
+  cafe: CafeListItem;
+  onOpenInfo: (id: string) => void;
+  onEdit: (id: string) => void;
+}) {
   const code = (cafe.image_code ?? "").trim();
   const imgPath = /^[0-9]{2}$/.test(code)
     ? `/media/cafes/${code}.jpg`
@@ -38,18 +46,30 @@ function CafeListCard({ cafe }: { cafe: CafeListItem }) {
         <CardTitle>
           <CafeName cafe={cafe} />
         </CardTitle>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-3">
           {cafe.is_active ? (
-            <Badge variant="success">Activa</Badge>
+            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+              Activa
+            </span>
           ) : (
-            <Badge variant="neutral">Inactiva</Badge>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+              Inactiva
+            </span>
           )}
-          <Link
-            href={`/app/admin/cafes/${cafe.id}/edit`}
-            className="text-sm font-medium text-[#C0841A] hover:underline"
+          <button
+            type="button"
+            onClick={() => onEdit(cafe.id)}
+            className="text-sm font-medium text-amber-600 hover:underline"
           >
             Editar
-          </Link>
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenInfo(cafe.id)}
+            className="text-sm font-medium text-blue-600 hover:underline"
+          >
+            Info
+          </button>
         </div>
       </div>
     </Card>
@@ -65,6 +85,7 @@ export default function CafeListClient({ cafes: initialCafes, nextCode }: Props)
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [nextCodeState, setNextCodeState] = useState(nextCode);
+  const [openInfoCafeId, setOpenInfoCafeId] = useState<string | null>(null);
 
   useEffect(() => {
     setNextCodeState(nextCode);
@@ -100,7 +121,12 @@ export default function CafeListClient({ cafes: initialCafes, nextCode }: Props)
             <p className="text-[#64748B]">Aún no hay cafeterías. Creá la primera.</p>
           ) : (
             initialCafes.map((cafe) => (
-              <CafeListCard key={cafe.id} cafe={cafe} />
+              <CafeListCard
+                key={cafe.id}
+                cafe={cafe}
+                onOpenInfo={setOpenInfoCafeId}
+                onEdit={(id) => router.push(`/app/admin/cafes/${id}/edit`)}
+              />
             ))
           )}
         </div>
@@ -111,6 +137,15 @@ export default function CafeListClient({ cafes: initialCafes, nextCode }: Props)
           initialCode={nextCodeState}
           onCancel={() => setCreating(false)}
           onSave={() => setCreating(false)}
+        />
+      )}
+
+      {openInfoCafeId && (
+        <CafeInfoModal
+          open={true}
+          cafeId={openInfoCafeId}
+          onClose={() => setOpenInfoCafeId(null)}
+          isAdmin={true}
         />
       )}
     </Container>

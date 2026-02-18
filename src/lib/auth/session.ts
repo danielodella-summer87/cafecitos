@@ -1,19 +1,27 @@
 import { cookies } from "next/headers"
 export const COOKIE_NAME = "cafecitos_session"
 export type SessionUser = {
-  profileId: string
-  role: "owner" | "consumer" | "admin"
+  profileId?: string | null
+  staffId?: string | null
+  role: "owner" | "staff" | "consumer" | "admin"
   cafeId?: string | null
   fullName?: string | null
   phone?: string | null
+  is_owner?: boolean
+  can_issue?: boolean
+  can_redeem?: boolean
 }
 
 /** Crea un token tipo JWT (header.payload) para la cookie de sesión. */
 export function signSessionToken(payload: {
-  profileId: string
+  profileId?: string | null
+  staffId?: string | null
   role: SessionUser["role"]
   cafeId?: string | null
   fullName?: string | null
+  is_owner?: boolean
+  can_issue?: boolean
+  can_redeem?: boolean
 }): string {
   const header = Buffer.from(JSON.stringify({ typ: "JWT", alg: "HS256" })).toString("base64url")
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url")
@@ -55,16 +63,19 @@ export async function getSession(): Promise<SessionUser | null> {
     const payloadStr = base64UrlDecode(parts[1])
     const payload = JSON.parse(payloadStr)
 
-    // Normalizamos claves según lo que estés firmando en signSessionToken()
-    // (si firmás profile_id, role, cafe_id -> mapeamos)
-    const profileId = payload.profileId ?? payload.profile_id ?? payload.profileID
+    const profileId = payload.profileId ?? payload.profile_id ?? payload.profileID ?? null
+    const staffId = payload.staffId ?? payload.staff_id ?? null
     const role = payload.role
     const cafeId = payload.cafeId ?? payload.cafe_id ?? null
     const fullName = payload.fullName ?? payload.full_name ?? null
+    const is_owner = payload.is_owner ?? null
+    const can_issue = payload.can_issue ?? null
+    const can_redeem = payload.can_redeem ?? null
 
-    if (!profileId || !role) return null
+    if (!role) return null
+    if (!profileId && !staffId) return null
 
-    return { profileId, role, cafeId, fullName }
+    return { profileId, staffId, role, cafeId, fullName, is_owner, can_issue, can_redeem }
   } catch {
     return null
   }

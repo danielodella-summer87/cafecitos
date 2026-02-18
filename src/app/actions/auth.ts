@@ -22,6 +22,41 @@ function onlyDigits(v: string) {
   return (v ?? "").replace(/\D/g, "");
 }
 
+/** Login dueño/empleado por cafe_staff (cédula + PIN). No registra empleados. */
+export async function signInCafeStaff(input: { cedula: string; pin: string }) {
+  const parsed = loginSchema.safeParse({ cedula: onlyDigits(input.cedula.trim()), pin: input.pin.trim() });
+  if (!parsed.success) return { ok: false, error: "Ingresá cédula y PIN válidos" };
+
+  const supabase = supabaseAdmin();
+  const { data: rows } = await supabase
+    .from("cafe_staff")
+    .select("id, cafe_id, full_name, name, is_owner, can_issue, can_redeem, pin_hash")
+    .eq("cedula", parsed.data.cedula)
+    .eq("is_active", true)
+    .limit(1);
+
+  const row = Array.isArray(rows) ? rows[0] : rows;
+  if (!row?.id || !row.pin_hash) return { ok: false, error: "Credenciales incorrectas" };
+
+  const valid = await bcrypt.compare(parsed.data.pin, row.pin_hash);
+  if (!valid) return { ok: false, error: "PIN incorrecto" };
+
+  const fullName = (row.full_name ?? row.name ?? "") as string;
+  const token = signSessionToken({
+    staffId: row.id,
+    role: row.is_owner ? "owner" : "staff",
+    cafeId: row.cafe_id ?? null,
+    fullName: fullName || null,
+    is_owner: !!row.is_owner,
+    can_issue: row.can_issue !== false,
+    can_redeem: row.can_redeem !== false,
+  });
+  await setSessionCookie(token);
+
+  const redirectTo = row.is_owner ? "/app/owner" : "/app/staff";
+  return { ok: true, redirectTo };
+}
+
 export async function loginUser(input: FormData | { cedula: string; pin: string }) {
   const raw =
     input instanceof FormData
@@ -39,6 +74,11 @@ export async function loginUser(input: FormData | { cedula: string; pin: string 
 
   const supabase = supabaseAdmin();
 
+  // 1) Acceso cafetería: dueño/empleado por cafe_staff (cedula + PIN)
+  const staffRes = await signInCafeStaff({ cedula: parsed.data.cedula, pin: parsed.data.pin });
+  if (staffRes.ok) return staffRes;
+
+  // 2) Usuario por profiles (consumidor, owner legacy, admin)
   const { data: profile, error } = await supabase
     .from("profiles")
     .select("id, role, cedula, full_name, cafe_id, pin_hash, phone, created_at, is_active")

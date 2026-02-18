@@ -37,18 +37,32 @@ function normalizeInput(input: unknown): { cedula: string; amount: number; note:
 export async function ownerAddCafecitos(input: FormData | { cedula: string; amount: number; note?: string }) {
   const parsed = schema.parse(normalizeInput(input));
 
-  // 1) validar sesión (debe ser owner con cafetería)
   const session = await getSession();
   if (!session) throw new Error("No autenticado");
-  if (session.role !== "owner") throw new Error("Solo un owner puede asignar cafecitos");
+  const cafeId = session.cafeId ?? null;
+  if (!cafeId) throw new Error("Sin cafetería asignada");
 
-  const actorOwnerProfileId = session.profileId;
-  const cafeId = session.cafeId; // IMPORTANTÍSIMO para aislar transacciones por cafetería
-  if (!cafeId) throw new Error("Owner sin cafetería asignada (cafe_id).");
+  let canIssue: boolean;
+  let actorOwnerProfileId: string | null = null;
+  let actorStaffId: string | null = null;
+
+  if (session.role === "owner") {
+    const { getOwnerContext } = await import("@/app/actions/ownerContext");
+    const ctx = await getOwnerContext();
+    if (!ctx) throw new Error("Sin cafetería asignada");
+    if (!ctx.capabilities.canIssue) throw new Error("No tenés permiso para asignar cafecitos");
+    canIssue = ctx.capabilities.canIssue;
+    actorOwnerProfileId = session.profileId ?? null;
+  } else if (session.role === "staff") {
+    canIssue = session.can_issue === true;
+    actorStaffId = session.staffId ?? null;
+    if (!canIssue) throw new Error("No tenés permiso para asignar cafecitos");
+  } else {
+    throw new Error("Solo dueño o empleado pueden asignar cafecitos");
+  }
 
   const supabase = supabaseAdmin();
 
-  // 2) buscar consumidor por cédula
   const { data: profile, error: pErr } = await supabase
     .from("profiles")
     .select("id, role")
@@ -58,11 +72,11 @@ export async function ownerAddCafecitos(input: FormData | { cedula: string; amou
   if (pErr || !profile) throw new Error("No existe un usuario con esa cédula");
   if (profile.role !== "consumer") throw new Error("La cédula no corresponde a un consumidor");
 
-  // 2) Insertar transacción (earn) - cafe_id: session.cafeId (nunca null; validado arriba)
   const { error: tErr } = await supabase.from("point_transactions").insert({
     tx_type: "earn",
     cafe_id: cafeId,
     actor_owner_profile_id: actorOwnerProfileId,
+    actor_staff_id: actorStaffId,
     to_profile_id: profile.id,
     amount: parsed.amount,
     note: parsed.note || "Carga manual",

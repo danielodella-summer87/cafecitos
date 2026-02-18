@@ -1,9 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { logout } from "@/app/actions/logout";
 import { ownerAddCafecitos } from "@/app/actions/owner";
 import { ownerRedeemCafecitos } from "@/app/actions/ownerRedeem";
+import {
+  getOwnerCafe,
+  getOwnerCafeKpis,
+  getOwnerCafePromos,
+  getOwnerCafeReviews,
+  toggleOwnerPromo,
+  updateCafeOwner,
+  type OwnerPromoRow,
+  type OwnerReviewRow,
+} from "@/app/actions/ownerCafe";
 import {
   getOwnerCafeEmployeeOptions,
   getOwnerCafeTransactions,
@@ -13,6 +22,7 @@ import {
 import { ownerGetConsumerSummary } from "@/app/actions/ownerSummary";
 import { getTxMeta } from "@/lib/ui/txLabels";
 import { PRO } from "@/lib/ui/pro";
+import OwnerStaffManager from "./OwnerStaffManager";
 
 type Json = Record<string, unknown>;
 
@@ -25,9 +35,29 @@ type LookupState = {
   last?: Array<{ id?: string; tx_type?: string; note?: string | null; amount?: number }>;
 };
 
+type CafeForClient = {
+  id: string;
+  name: string;
+  image_code: string | null;
+  city: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  instagram: string | null;
+  description: string | null;
+  hours_text: string | null;
+};
+
+export type OwnerCapabilities = {
+  isOwner: boolean;
+  canIssue: boolean;
+  canRedeem: boolean;
+};
+
 type Props = {
   me: { full_name: string | null; cedula: string };
-  myCafe: { name: string; image_code?: string | number | null } | null;
+  myCafe: CafeForClient | null;
+  capabilities?: OwnerCapabilities;
 };
 
 function CafecitosLabel({ children }: { children: React.ReactNode }) {
@@ -43,7 +73,12 @@ const debug =
   typeof window !== "undefined" &&
   new URLSearchParams(window.location.search).get("debug") === "1";
 
-export default function OwnerPanelClient({ me, myCafe }: Props) {
+export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Props) {
+  const capabilities: OwnerCapabilities = caps ?? { isOwner: true, canIssue: true, canRedeem: true };
+  const isOwner = capabilities.isOwner;
+  const canIssue = capabilities.canIssue;
+  const canRedeem = capabilities.canRedeem;
+
   const [cedula, setCedula] = useState("");
   const [amount, setAmount] = useState<number>(1);
   const [note, setNote] = useState("");
@@ -84,6 +119,15 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
   const [historialSummary30d, setHistorialSummary30d] = useState<{ assigned: number; redeemed: number; net: number } | null>(null);
   const [historialEmployeeOptions, setHistorialEmployeeOptions] = useState<OwnerEmployeeOption[]>([]);
 
+  const [cafeEdit, setCafeEdit] = useState(false);
+  const [cafeForm, setCafeForm] = useState<CafeForClient | null>(null);
+  const [cafeSaveToast, setCafeSaveToast] = useState(false);
+  const [promosList, setPromosList] = useState<OwnerPromoRow[]>([]);
+  const [reviewsData, setReviewsData] = useState<{ stats: { avg_rating: number; reviews_count: number } | null; reviews: OwnerReviewRow[] }>({ stats: null, reviews: [] });
+  const [kpis7, setKpis7] = useState<{ generado: number; canjeado: number; neto: number; clientes_unicos: number } | null>(null);
+  const [kpis30, setKpis30] = useState<{ generado: number; canjeado: number; neto: number; clientes_unicos: number } | null>(null);
+  const [gestionLoading, setGestionLoading] = useState(false);
+
   const canAssign = useMemo(() => {
     return (
       lookup?.profile &&
@@ -95,7 +139,7 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
   }, [lookup, cedula, amount]);
 
   const consumer = lookup?.profile;
-  const canRedeem = useMemo(() => {
+  const redeemFormValid = useMemo(() => {
     return (
       !!consumer &&
       consumer.role === "consumer" &&
@@ -135,7 +179,7 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
         last: (res.last ?? []) as LookupState["last"],
       });
 
-      if (res?.error) setStatus(res.error);
+      if (res?.error) setStatus(res.error ?? null);
     } catch (e: unknown) {
       setStatus(e instanceof Error ? e.message : "Error buscando cliente");
     } finally {
@@ -254,10 +298,42 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
     }
   }, [tab]);
 
+  useEffect(() => {
+    if (myCafe && !cafeForm) setCafeForm(myCafe);
+  }, [myCafe, cafeForm]);
+
+  useEffect(() => {
+    if (tab !== "atender" || !isOwner) return;
+    setGestionLoading(true);
+    Promise.all([
+      getOwnerCafePromos(),
+      getOwnerCafeReviews(),
+      getOwnerCafeKpis(7),
+      getOwnerCafeKpis(30),
+    ])
+      .then(([promos, reviews, k7, k30]) => {
+        setPromosList(promos);
+        setReviewsData({ stats: reviews.stats, reviews: reviews.reviews });
+        setKpis7(k7 ? { generado: k7.generado, canjeado: k7.canjeado, neto: k7.neto, clientes_unicos: k7.clientes_unicos } : null);
+        setKpis30(k30 ? { generado: k30.generado, canjeado: k30.canjeado, neto: k30.neto, clientes_unicos: k30.clientes_unicos } : null);
+      })
+      .finally(() => setGestionLoading(false));
+  }, [tab, isOwner]);
+
   const formatDate = (iso: string) =>
     new Intl.DateTimeFormat("es-UY", { dateStyle: "short", timeStyle: "short" }).format(new Date(iso));
 
+  const handleBackToOwnerPanel = useCallback(() => {
+    setTab("atender");
+  }, []);
+
   const exportHistorialXls = useCallback(() => {
+    const nn = myCafe ? String(myCafe.image_code ?? "").padStart(2, "0") : "00";
+    const safeName = (myCafe?.name ?? "cafe").replace(/\W+/g, "_").slice(0, 40);
+    const range = `${historialDays}d`;
+    const base = `historial_${nn}-${safeName}_${range}`;
+    const filename = `${base}.xls`;
+
     const headers = ["Tipo", "Cantidad", "Cliente (cédula)", "Cliente (nombre)", "Empleado", "Fecha/hora"];
     const escape = (s: string) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     const rows = historialRows.map((r) => [
@@ -282,24 +358,25 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `historial-cafecitos-${new Date().toISOString().slice(0, 10)}.xls`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-  }, [historialRows]);
+  }, [historialRows, myCafe, historialDays]);
 
   return (
     <div className={PRO.page}>
       <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-3xl font-semibold">Panel de la cafetería</h1>
-        <form action={logout}>
+        {tab !== "atender" && (
           <button
-            type="submit"
-            className="text-sm px-3 py-1 border rounded-md hover:bg-gray-100"
+            type="button"
+            onClick={handleBackToOwnerPanel}
+            className="bg-red-600 text-white rounded-full px-4 py-2 text-sm font-medium hover:bg-red-700"
           >
             Salir
           </button>
-        </form>
+        )}
       </div>
       <p className="mt-2 text-3xl font-semibold text-red-500">
         {myCafe
@@ -315,13 +392,15 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
         >
           Gestión
         </button>
-        <button
-          type="button"
-          onClick={() => setTab("historial")}
-          className={`px-4 py-2 font-medium rounded-t-md transition-colors ${tab === "historial" ? "bg-red-600 text-white" : "bg-[#F6EFE6] text-neutral-700 hover:bg-neutral-200"}`}
-        >
-          Historial
-        </button>
+        {isOwner && (
+          <button
+            type="button"
+            onClick={() => setTab("historial")}
+            className={`px-4 py-2 font-medium rounded-t-md transition-colors ${tab === "historial" ? "bg-red-600 text-white" : "bg-[#F6EFE6] text-neutral-700 hover:bg-neutral-200"}`}
+          >
+            Historial
+          </button>
+        )}
       </div>
 
       {tab === "historial" && (
@@ -506,7 +585,144 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
       )}
 
       {tab === "atender" && (
-      <div className="border rounded-xl p-4 space-y-3">
+      <div className="space-y-6">
+        {isOwner && (
+        <>
+        {/* A) Ficha de la cafetería */}
+        <div className="rounded-xl border border-neutral-200 bg-[#F6EFE6] overflow-hidden">
+          <div className="relative h-32 sm:h-40 bg-neutral-200">
+            <img
+              src={myCafe?.image_code ? `/media/cafes/${String(myCafe.image_code).padStart(2, "0")}.jpg` : "/media/cover-default.jpg"}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div className="p-4 space-y-3">
+            {cafeSaveToast && (
+              <p className="text-sm text-green-700 font-medium">Guardado.</p>
+            )}
+            {!cafeEdit && cafeForm && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                  {(cafeForm.city || cafeForm.address) && (
+                    <div>
+                      <span className="text-neutral-500">Ubicación:</span>{" "}
+                      {[cafeForm.city, cafeForm.address].filter(Boolean).join(", ") || "—"}
+                    </div>
+                  )}
+                  {cafeForm.phone && <div><span className="text-neutral-500">Teléfono:</span> {cafeForm.phone}</div>}
+                  {cafeForm.email && <div><span className="text-neutral-500">Email:</span> {cafeForm.email}</div>}
+                  {cafeForm.instagram && <div><span className="text-neutral-500">Instagram:</span> {cafeForm.instagram}</div>}
+                  {cafeForm.description && <div className="sm:col-span-2"><span className="text-neutral-500">Descripción:</span> {cafeForm.description}</div>}
+                  {cafeForm.hours_text && <div className="sm:col-span-2"><span className="text-neutral-500">Horario:</span> {cafeForm.hours_text}</div>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(cafeForm.address || cafeForm.city) && (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([cafeForm.address, cafeForm.city].filter(Boolean).join(", "))}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg px-3 py-2 text-sm border border-red-600 text-red-600 hover:bg-red-50"
+                    >
+                      Ver en mapa
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setCafeEdit(true)}
+                    className="rounded-lg px-4 py-2 bg-red-600 text-white font-medium hover:bg-red-700"
+                  >
+                    Editar
+                  </button>
+                </div>
+              </>
+            )}
+            {cafeEdit && cafeForm && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const res = await updateCafeOwner({
+                    name: cafeForm.name,
+                    city: cafeForm.city ?? undefined,
+                    address: cafeForm.address ?? undefined,
+                    phone: cafeForm.phone ?? undefined,
+                    email: cafeForm.email ?? undefined,
+                    instagram: cafeForm.instagram ?? undefined,
+                    description: cafeForm.description ?? undefined,
+                    hours_text: cafeForm.hours_text ?? undefined,
+                  });
+                  if (res.ok) {
+                    const updated = await getOwnerCafe();
+                    if (updated) setCafeForm({ ...cafeForm, ...updated });
+                    setCafeEdit(false);
+                    setCafeSaveToast(true);
+                    setTimeout(() => setCafeSaveToast(false), 3000);
+                  } else {
+                    setStatus(res.error ?? "Error al guardar");
+                  }
+                }}
+                className="space-y-3"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium mb-1">Nombre (mín. 5 caracteres)</label>
+                    <input className="w-full border rounded-lg px-3 py-2" value={cafeForm.name} onChange={(e) => setCafeForm({ ...cafeForm, name: e.target.value })} required minLength={5} />
+                  </div>
+                  <div><label className="block text-sm font-medium mb-1">Ciudad</label><input className="w-full border rounded-lg px-3 py-2" value={cafeForm.city ?? ""} onChange={(e) => setCafeForm({ ...cafeForm, city: e.target.value })} /></div>
+                  <div><label className="block text-sm font-medium mb-1">Dirección</label><input className="w-full border rounded-lg px-3 py-2" value={cafeForm.address ?? ""} onChange={(e) => setCafeForm({ ...cafeForm, address: e.target.value })} /></div>
+                  <div><label className="block text-sm font-medium mb-1">Teléfono</label><input className="w-full border rounded-lg px-3 py-2" value={cafeForm.phone ?? ""} onChange={(e) => setCafeForm({ ...cafeForm, phone: e.target.value })} /></div>
+                  <div><label className="block text-sm font-medium mb-1">Email</label><input type="email" className="w-full border rounded-lg px-3 py-2" value={cafeForm.email ?? ""} onChange={(e) => setCafeForm({ ...cafeForm, email: e.target.value })} /></div>
+                  <div><label className="block text-sm font-medium mb-1">Instagram</label><input className="w-full border rounded-lg px-3 py-2" value={cafeForm.instagram ?? ""} onChange={(e) => setCafeForm({ ...cafeForm, instagram: e.target.value })} /></div>
+                  <div className="sm:col-span-2"><label className="block text-sm font-medium mb-1">Descripción</label><textarea className="w-full border rounded-lg px-3 py-2" rows={2} value={cafeForm.description ?? ""} onChange={(e) => setCafeForm({ ...cafeForm, description: e.target.value })} /></div>
+                  <div className="sm:col-span-2"><label className="block text-sm font-medium mb-1">Horario (máx. 120 caracteres)</label><textarea className="w-full border rounded-lg px-3 py-2" rows={2} maxLength={120} placeholder="Lun-Vie 8–19 / Sáb 9–14" value={cafeForm.hours_text ?? ""} onChange={(e) => setCafeForm({ ...cafeForm, hours_text: e.target.value })} /></div>
+                </div>
+                <div className="flex gap-2">
+                  <button type="submit" className="rounded-lg px-4 py-2 bg-red-600 text-white font-medium hover:bg-red-700">Guardar</button>
+                  <button type="button" onClick={async () => { const u = await getOwnerCafe(); if (u) setCafeForm({ ...cafeForm, ...u }); setCafeEdit(false); }} className="rounded-lg px-4 py-2 border border-neutral-300 hover:bg-neutral-100">Cancelar</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+
+        {/* F) KPIs rápidos */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {kpis7 && (
+            <>
+              <div className="rounded-xl border border-neutral-200 bg-[#F6EFE6] p-3">
+                <div className="text-xs text-neutral-500">7 días · Asignados</div>
+                <div className="text-xl font-semibold text-green-700">{kpis7.generado}</div>
+              </div>
+              <div className="rounded-xl border border-neutral-200 bg-[#F6EFE6] p-3">
+                <div className="text-xs text-neutral-500">7 días · Cobrados</div>
+                <div className="text-xl font-semibold text-red-600">{kpis7.canjeado}</div>
+              </div>
+            </>
+          )}
+          {kpis30 && (
+            <>
+              <div className="rounded-xl border border-neutral-200 bg-[#F6EFE6] p-3">
+                <div className="text-xs text-neutral-500">30 días · Neto</div>
+                <div className="text-xl font-semibold">{kpis30.neto}</div>
+              </div>
+              <div className="rounded-xl border border-neutral-200 bg-[#F6EFE6] p-3">
+                <div className="text-xs text-neutral-500">30 días · Clientes únicos</div>
+                <div className="text-xl font-semibold">{kpis30.clientes_unicos}</div>
+              </div>
+            </>
+          )}
+        </div>
+        {(kpis7 || kpis30) && (
+          <div>
+            <button type="button" onClick={() => setTab("historial")} className="rounded-lg px-4 py-2 bg-red-600 text-white font-medium hover:bg-red-700">Ver detalles (Historial)</button>
+          </div>
+        )}
+        </>
+        )}
+
+        {/* Atender cliente */}
+      <div className="border rounded-xl p-4 space-y-3 bg-[#F6EFE6]">
+        <h2 className="text-lg font-semibold">Atender cliente</h2>
         <label className="block text-sm font-medium">Cédula del cliente</label>
         <input
           ref={cedulaInputRef}
@@ -692,6 +908,8 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
           </div>
         )}
 
+        {canIssue && (
+        <>
         {/* Sumar cafecitos */}
         <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 space-y-3">
           <button
@@ -738,7 +956,11 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
             </>
           )}
         </section>
+        </>
+        )}
 
+        {canRedeem && (
+        <>
         {/* Separador */}
         <div className="border-t border-neutral-200" />
 
@@ -800,7 +1022,7 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
                   </div>
                   <button
                     type="submit"
-                    disabled={!consumer || !canRedeem || loadingRedeem || redeemBlocked}
+                    disabled={!consumer || !redeemFormValid || loadingRedeem || redeemBlocked}
                     className="w-full rounded-lg px-3 py-2 border border-amber-200 bg-amber-50 hover:bg-amber-100 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {loadingRedeem ? "Canjeando..." : "Canjear"}
@@ -810,8 +1032,72 @@ export default function OwnerPanelClient({ me, myCafe }: Props) {
             )}
           </section>
         )}
+        </>
+        )}
 
         {consumer && status && <div className="text-sm">{status}</div>}
+      </div>
+
+        {isOwner && (
+        <>
+        {/* C) Personal (solo dueño) */}
+        <OwnerStaffManager />
+
+        {/* D) Promociones */}
+        <div className="rounded-xl border border-neutral-200 bg-[#F6EFE6] p-4">
+          <h2 className="text-lg font-semibold mb-3">Promociones</h2>
+          {gestionLoading ? (
+            <p className="text-sm text-neutral-500">Cargando…</p>
+          ) : promosList.length === 0 ? (
+            <p className="text-sm text-neutral-500">No hay promociones cargadas.</p>
+          ) : (
+            <ul className="space-y-2">
+              {promosList.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-neutral-200 bg-white p-2 text-sm">
+                  <div>
+                    <span className="font-medium">{p.title}</span>
+                    {p.description && <span className="text-neutral-500 ml-2">— {p.description.slice(0, 60)}{p.description.length > 60 ? "…" : ""}</span>}
+                  </div>
+                  <span className="text-xs">{p.is_active ? "Participa: Sí" : "Participa: No"}</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const res = await toggleOwnerPromo(p.id, !p.is_active);
+                      if (res.ok) setPromosList(await getOwnerCafePromos());
+                      else setStatus(res.error ?? null);
+                    }}
+                    className="rounded-lg px-3 py-1 text-sm bg-red-600 text-white"
+                  >
+                    {p.is_active ? "Quitarme" : "Sumarme"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* E) Reseñas (solo lectura) */}
+        <div className="rounded-xl border border-neutral-200 bg-[#F6EFE6] p-4">
+          <h2 className="text-lg font-semibold mb-3">Reseñas</h2>
+          {reviewsData.stats && (
+            <p className="text-sm mb-2">Valoración promedio: <strong>{reviewsData.stats.avg_rating}</strong> · Cantidad: <strong>{reviewsData.stats.reviews_count}</strong></p>
+          )}
+          {reviewsData.reviews.length === 0 ? (
+            <p className="text-sm text-neutral-500">Sin reseñas aún.</p>
+          ) : (
+            <ul className="space-y-2 max-h-60 overflow-y-auto">
+              {reviewsData.reviews.slice(0, 15).map((r) => (
+                <li key={r.id} className="rounded-lg border border-neutral-200 bg-white p-2 text-sm">
+                  <span className="font-medium">{r.rating} ★</span>
+                  {r.comment && <span className="ml-2">{r.comment}</span>}
+                  <div className="text-xs text-neutral-500 mt-1">{r.author_name || r.author_cedula || "Anónimo"} · {new Date(r.created_at).toLocaleDateString("es-UY")}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        </>
+        )}
       </div>
       )}
     </div>

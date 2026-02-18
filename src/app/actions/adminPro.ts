@@ -351,8 +351,9 @@ export async function adminListProfiles() {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id,full_name,cedula,role,is_active,tier_id,created_at,cafe_id")
-    .order("created_at", { ascending: false });
+    .select("id,full_name,cedula,role,is_active,tier_id,created_at,cafe_id,phone")
+    .order("role", { ascending: true })
+    .order("full_name", { ascending: true });
 
   if (error) return { ok: false as const, error: error.message };
   return { ok: true as const, profiles: data ?? [] };

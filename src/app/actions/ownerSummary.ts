@@ -87,13 +87,26 @@ export async function ownerGetConsumerSummary(input: unknown) {
   const parsed = schema.parse(normalizeInput(input));
   const cedula = parsed.cedula;
 
-  // 1) sesión
   const session = await getSession();
   if (!session) throw new Error("No autenticado");
-  if (session.role !== "owner") throw new Error("Solo un owner puede ver el panel");
+  if (session.role !== "owner" && session.role !== "staff") throw new Error("Solo dueño o staff pueden buscar clientes");
 
   const cafeId = session.cafeId ?? null;
-  if (!cafeId) throw new Error("Owner sin cafetería asignada (cafe_id).");
+  if (!cafeId) throw new Error("Sin cafetería asignada (cafe_id).");
+
+  let canIssue = false;
+  let canRedeem = false;
+  if (session.role === "owner") {
+    const { getOwnerContext } = await import("@/app/actions/ownerContext");
+    const ctx = await getOwnerContext();
+    if (!ctx) throw new Error("Sin cafetería asignada");
+    canIssue = ctx.capabilities.canIssue;
+    canRedeem = ctx.capabilities.canRedeem;
+  } else {
+    canIssue = session.can_issue === true;
+    canRedeem = session.can_redeem === true;
+  }
+  if (!canIssue && !canRedeem) throw new Error("No tenés permiso para atender clientes");
 
   const supabase = supabaseAdmin();
 

@@ -14,6 +14,10 @@ export async function ownerLookupConsumer(input: unknown) {
   const session = await getSession();
   if (!session) throw new Error("No autenticado");
   if (session.role !== "owner") throw new Error("Solo un owner puede buscar consumidores");
+  const { getOwnerContext } = await import("@/app/actions/ownerContext");
+  const ctx = await getOwnerContext();
+  if (!ctx) throw new Error("Sin cafetería asignada");
+  if (!ctx.capabilities.canIssue && !ctx.capabilities.canRedeem) throw new Error("No tenés permiso para buscar clientes");
 
   const supabase = supabaseAdmin();
 

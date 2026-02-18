@@ -73,10 +73,27 @@ export async function ownerRedeemCafecitos(
 
   const session = await getSession();
   if (!session) return { ok: false, error: "No autenticado" };
-  if (session.role !== "owner") return { ok: false, error: "Solo un owner puede canjear" };
+  const cafeId = session.cafeId ?? null;
+  if (!cafeId) return { ok: false, error: "Sin cafetería asignada" };
 
-  const cafeId = session.cafeId;
-  if (!cafeId) return { ok: false, error: "Owner sin cafetería asignada (cafe_id)." };
+  let canRedeem: boolean;
+  let actorOwnerProfileId: string | null = null;
+  let actorStaffId: string | null = null;
+
+  if (session.role === "owner") {
+    const { getOwnerContext } = await import("@/app/actions/ownerContext");
+    const ctx = await getOwnerContext();
+    if (!ctx) return { ok: false, error: "Sin cafetería asignada" };
+    if (!ctx.capabilities.canRedeem) return { ok: false, error: "No tenés permiso para cobrar/canjear cafecitos" };
+    canRedeem = true;
+    actorOwnerProfileId = session.profileId ?? null;
+  } else if (session.role === "staff") {
+    canRedeem = session.can_redeem === true;
+    actorStaffId = session.staffId ?? null;
+    if (!canRedeem) return { ok: false, error: "No tenés permiso para cobrar/canjear cafecitos" };
+  } else {
+    return { ok: false, error: "Solo dueño o empleado pueden canjear" };
+  }
 
   const supabase = supabaseAdmin();
 
@@ -110,7 +127,8 @@ export async function ownerRedeemCafecitos(
   const { error: insertErr } = await supabase.from("point_transactions").insert({
     tx_type: "redeem",
     cafe_id: cafeId,
-    actor_owner_profile_id: session.profileId,
+    actor_owner_profile_id: actorOwnerProfileId,
+    actor_staff_id: actorStaffId,
     from_profile_id: consumerId,
     to_profile_id: null,
     amount: parsed.data.amount,

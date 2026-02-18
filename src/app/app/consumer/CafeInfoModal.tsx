@@ -13,9 +13,20 @@ type CafeInfoModalProps = {
   open: boolean;
   cafeId: string;
   onClose: () => void;
+  /** Si true (usuario admin), ve reseñas pero no puede calificar ni guardar. */
+  isAdmin?: boolean;
 };
 
-export default function CafeInfoModal({ open, cafeId, onClose }: CafeInfoModalProps) {
+function formatReviewDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString("es-UY", { day: "2-digit", month: "short", year: "numeric" });
+  } catch {
+    return "";
+  }
+}
+
+export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false }: CafeInfoModalProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -175,7 +186,7 @@ export default function CafeInfoModal({ open, cafeId, onClose }: CafeInfoModalPr
                 )}
               </section>
 
-              {/* Reseñas */}
+              {/* Reseñas: siempre visible (admin + cliente). Promedio, cantidad y lista. */}
               <section>
                 <h3 className="text-sm font-semibold text-[#0F172A]">Reseñas</h3>
                 <p className="mt-1 text-sm text-slate-700">
@@ -184,41 +195,67 @@ export default function CafeInfoModal({ open, cafeId, onClose }: CafeInfoModalPr
                     <span className="text-slate-500"> ({data.reviewsStats.reviews_count})</span>
                   )}
                 </p>
-                <div className="mt-3">
-                  <p className="mb-2 text-xs font-medium text-slate-600">Calificar</p>
-                  <div className="mb-3 flex gap-2">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => setRating(n)}
-                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                          rating === n
-                            ? "border-red-600 bg-red-600 text-white"
-                            : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                        }`}
+                {(data.reviews ?? []).length > 0 ? (
+                  <div className="mt-3 space-y-3">
+                    {(data.reviews ?? []).map((r) => (
+                      <div
+                        key={r.id}
+                        className="rounded-xl border border-[rgba(15,23,42,0.1)] bg-white/50 p-3"
                       >
-                        {n}
-                      </button>
+                        <div className="text-sm font-medium text-[#0F172A]">⭐ {r.rating}</div>
+                        {r.comment ? (
+                          <div className="mt-1 text-sm text-slate-600">{r.comment}</div>
+                        ) : null}
+                        <div className="mt-1 text-xs text-slate-400">
+                          {formatReviewDate(r.created_at)}
+                        </div>
+                      </div>
                     ))}
                   </div>
-                  <textarea
-                    className="input min-h-[80px] resize-y"
-                    placeholder="Comentario (opcional)"
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="danger"
-                    size="sm"
-                    className="mt-2 w-full sm:w-auto"
-                    disabled={rating < 1 || savingReview}
-                    onClick={handleSaveReview}
-                  >
-                    {savingReview ? "Guardando…" : "Guardar reseña"}
-                  </Button>
-                </div>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-600">Aún no hay reseñas.</p>
+                )}
+
+                {/* Calificar / Guardar: solo clientes. Admin ve mensaje. */}
+                {!isAdmin ? (
+                  <div className="mt-4">
+                    <p className="mb-2 text-xs font-medium text-slate-600">Calificar</p>
+                    <div className="mb-3 flex gap-2">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setRating(n)}
+                          className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                            rating === n
+                              ? "border-red-600 bg-red-600 text-white"
+                              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      className="input min-h-[80px] resize-y"
+                      placeholder="Comentario (opcional)"
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      className="mt-2 w-full sm:w-auto"
+                      disabled={rating < 1 || savingReview}
+                      onClick={handleSaveReview}
+                    >
+                      {savingReview ? "Guardando…" : "Guardar reseña"}
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm text-slate-600">Solo los clientes pueden calificar.</p>
+                )}
               </section>
 
               {/* Cerrar */}

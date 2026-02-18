@@ -31,6 +31,7 @@ type Props = {
     tier_id: string | null;
     cafe_id: string | null;
     created_at: string;
+    phone?: string | null;
   }>;
   initialCafes: Array<{ id: string; name: string; is_active?: boolean }>;
   initialOwnerCafes?: Record<string, Array<{ cafe_id: string; cafe_name: string; cafe_tier_name: string | null; badge_color: string | null; total_points: number }>>;
@@ -69,6 +70,7 @@ export default function AdminPanelClient(props: Props) {
   const [rewards, setRewards] = useState<AdminReward[]>(props.initialRewards ?? []);
   const [profiles, setProfiles] = useState(props.initialProfiles ?? []);
   const [cafes, setCafes] = useState(props.initialCafes ?? []);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const tierOptions = useMemo(
     () => [{ id: "", name: "— Sin nivel —" }, ...tiers.map((t) => ({ id: t.id ?? "", name: t.name }))],
@@ -85,6 +87,26 @@ export default function AdminPanelClient(props: Props) {
     toastRef.current = globalThis.setTimeout(() => {
       setToast(null);
     }, 2500);
+  }
+
+  async function handleExportExcel() {
+    setExportLoading(true);
+    try {
+      const res = await fetch("/app/admin/clientes/export");
+      if (!res.ok) throw new Error("Error al exportar");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "clientes.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+      notify("✅ Excel descargado");
+    } catch {
+      notify("Error al exportar Excel");
+    } finally {
+      setExportLoading(false);
+    }
   }
 
   return (
@@ -107,7 +129,7 @@ export default function AdminPanelClient(props: Props) {
           <Link href="/app/admin/niveles" className="px-4 py-2 rounded-md border bg-white hover:bg-neutral-50 text-neutral-700 no-underline">
             Niveles
           </Link>
-          <button className={`px-4 py-2 rounded-md border ${tab === "profiles" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("profiles")}>Socios</button>
+          <button className={`px-4 py-2 rounded-md border ${tab === "profiles" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("profiles")}>Clientes</button>
           <Link href="/app/admin/cafes" className="px-4 py-2 rounded-md border bg-white hover:bg-neutral-50 text-neutral-700 no-underline">
             Cafeterías
           </Link>
@@ -435,9 +457,19 @@ export default function AdminPanelClient(props: Props) {
         {/* ========================= PROFILES ========================= */}
         {tab === "profiles" && (
           <div className="rounded-2xl border p-6 bg-white space-y-4">
-            <div>
-              <div className="text-xl font-semibold">Socios</div>
-              <div className="text-sm text-neutral-500">Activar/desactivar (admin NO), asignar nivel.</div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-xl font-semibold">Clientes</div>
+                <div className="text-sm text-neutral-500">Activar/desactivar (admin NO), asignar nivel.</div>
+              </div>
+              <button
+                type="button"
+                disabled={exportLoading}
+                onClick={handleExportExcel}
+                className="rounded-lg px-4 py-2 border border-green-600 text-green-700 bg-white hover:bg-green-50 font-medium disabled:opacity-50"
+              >
+                {exportLoading ? "Exportando…" : "Exportar Excel"}
+              </button>
             </div>
 
             <div className="overflow-auto border rounded-xl">
