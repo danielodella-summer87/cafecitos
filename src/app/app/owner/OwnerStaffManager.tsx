@@ -51,6 +51,7 @@ export default function OwnerStaffManager() {
   const [addCanRedeem, setAddCanRedeem] = useState(true);
   const [addIsActive, setAddIsActive] = useState(true);
   const [addSubmitting, setAddSubmitting] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,29 +59,30 @@ export default function OwnerStaffManager() {
     const cedula = addCedula.replace(/\D/g, "").trim();
     const pin = addPin.trim();
     const pinConfirm = addPinConfirm.trim();
+    setAddError(null);
     if (name.length < 2) {
-      setError("El nombre debe tener al menos 2 caracteres.");
+      setAddError("El nombre debe tener al menos 2 caracteres.");
       return;
     }
     if (addRole.trim().length < 2) {
-      setError("El rol es obligatorio (mín. 2 caracteres).");
+      setAddError("El rol es obligatorio (mín. 2 caracteres).");
       return;
     }
     if (!cedula) {
-      setError("La cédula es obligatoria (solo dígitos).");
+      setAddError("La cédula es obligatoria (solo dígitos).");
       return;
     }
     if (!/^\d{4}$/.test(pin)) {
-      setError("El PIN debe ser exactamente 4 dígitos.");
+      setAddError("El PIN debe ser exactamente 4 dígitos.");
       return;
     }
     if (pin !== pinConfirm) {
-      setError("El PIN y la confirmación no coinciden.");
+      setAddError("El PIN y la confirmación no coinciden.");
       return;
     }
 
     setAddSubmitting(true);
-    setError(null);
+    setAddError(null);
     try {
       const res = await createOwnerStaff({
         full_name: name,
@@ -101,14 +103,16 @@ export default function OwnerStaffManager() {
         setAddCanIssue(true);
         setAddCanRedeem(true);
         setAddIsActive(true);
+        setAddError(null);
         await load();
         router.refresh();
         showSuccess("Empleado creado");
       } else {
-        setError(res.error ?? "No se pudo crear");
+        setAddError(res.error ?? "No se pudo crear");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo crear");
+      const message = err instanceof Error ? err.message : String(err);
+      setAddError(message || "No se pudo crear el empleado.");
     } finally {
       setAddSubmitting(false);
     }
@@ -267,7 +271,7 @@ export default function OwnerStaffManager() {
         <h2 className="text-lg font-semibold">Personal</h2>
         <button
           type="button"
-          onClick={() => { setAddOpen(true); setError(null); }}
+          onClick={() => { setAddOpen(true); setAddError(null); setError(null); }}
           className="rounded-lg px-4 py-2 bg-red-600 text-white text-sm font-medium hover:bg-red-700"
         >
           Agregar empleado
@@ -380,7 +384,7 @@ export default function OwnerStaffManager() {
       )}
 
       {/* Modal Agregar empleado */}
-      <Modal open={addOpen} title="Agregar empleado" onClose={() => { setAddOpen(false); setError(null); }}>
+      <Modal open={addOpen} title="Agregar empleado" onClose={() => { setAddOpen(false); setAddError(null); setError(null); }}>
         <form onSubmit={handleCreate} className="space-y-3">
           <div>
             <label className="block text-sm font-medium mb-1">Nombre (mín. 2 caracteres)</label>
@@ -458,13 +462,18 @@ export default function OwnerStaffManager() {
             <input type="checkbox" checked={addIsActive} onChange={(e) => setAddIsActive(e.target.checked)} />
             <span className="text-sm">Activo</span>
           </label>
-          <div className="flex gap-2 pt-2">
-            <button type="submit" disabled={addSubmitting} className="rounded-lg px-4 py-2 bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50">
-              {addSubmitting ? "Creando…" : "Crear"}
-            </button>
-            <button type="button" onClick={() => setAddOpen(false)} className="rounded-lg px-4 py-2 border border-neutral-300 hover:bg-neutral-100">
-              Cancelar
-            </button>
+          <div className="flex flex-col gap-2 pt-2">
+            <div className="flex gap-2">
+              <button type="submit" disabled={addSubmitting} className="rounded-lg px-4 py-2 bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50">
+                {addSubmitting ? "Creando…" : "Crear"}
+              </button>
+              <button type="button" onClick={() => setAddOpen(false)} className="rounded-lg px-4 py-2 border border-neutral-300 hover:bg-neutral-100">
+                Cancelar
+              </button>
+            </div>
+            {addError && (
+              <p className="text-sm text-red-600" role="alert">{addError}</p>
+            )}
           </div>
         </form>
       </Modal>

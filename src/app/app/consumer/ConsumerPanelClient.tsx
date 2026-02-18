@@ -6,6 +6,7 @@ import Link from "next/link";
 import { logout } from "@/app/actions/logout";
 import type { ConsumerSummaryResult, ConsumerTx, CafeMapItem } from "@/app/actions/consumerSummary";
 import type { CafeListItem } from "@/app/actions/cafes";
+import type { CoffeeGuide } from "@/app/actions/coffeeGuides";
 import { getTxMeta } from "@/lib/ui/txLabels";
 import { getMembershipTier, getNextTierInfo } from "@/lib/ui/membership";
 import {
@@ -15,7 +16,6 @@ import {
   CardTitle,
   CardSubtitle,
   Button,
-  Badge,
 } from "@/app/ui/components";
 import { PromoCard, CafeCard } from "@/app/ui/media";
 import AppName from "@/app/ui/AppName";
@@ -36,6 +36,7 @@ const PROMOS_MOCK: Array<{ id: string; image: string; title: string; description
 type Props = {
   data: ConsumerSummaryResult;
   cafesList: CafeListItem[];
+  guidesPreview?: CoffeeGuide[];
 };
 
 function cafeName(cafeId: string | null, cafesMap: Record<string, CafeMapItem>): string {
@@ -43,12 +44,13 @@ function cafeName(cafeId: string | null, cafesMap: Record<string, CafeMapItem>):
   return cafesMap[cafeId]?.name ?? "(sin cafetería)";
 }
 
-export default function ConsumerPanelClient({ data, cafesList }: Props) {
+export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [] }: Props) {
   const router = useRouter();
   const params = useSearchParams();
   const debug = params.get("debug") === "1";
   const [openCafeId, setOpenCafeId] = useState<string | null>(null);
   const [openLevelInfo, setOpenLevelInfo] = useState(false);
+  const [isCafesOpen, setCafesOpen] = useState(false);
 
   const { session, balance, last10, generatedTotal, redeemedTotal, cafesMap } = data;
   const missing = Math.max(0, BENEFIT_TARGET - balance);
@@ -125,15 +127,15 @@ export default function ConsumerPanelClient({ data, cafesList }: Props) {
 
               <Card className="!bg-[#F6EFE6]">
                 <CardTitle>Tu nivel</CardTitle>
-                <div className="mt-3 flex items-center gap-2">
-                  <span className={`h-2.5 w-2.5 rounded-full ${tier.dotClass}`} aria-hidden />
+                <div className="mt-3">
                   <button
                     type="button"
                     onClick={() => setOpenLevelInfo(true)}
-                    className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-1 rounded-full"
+                    className="relative z-10 inline-flex items-center justify-center gap-2 h-10 px-4 rounded-full text-base font-semibold border bg-[#C0841A]/12 text-[#B45309] border-[#C0841A]/25 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-1 hover:bg-[#C0841A]/20 transition-colors"
                     aria-label={`Ver información del nivel ${tier.name}`}
                   >
-                    <Badge variant="accent">{tier.name}</Badge>
+                    <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${tier.dotClass}`} aria-hidden />
+                    {tier.name}
                   </button>
                 </div>
                 {next.nextName && next.remaining > 0 ? (
@@ -184,19 +186,19 @@ export default function ConsumerPanelClient({ data, cafesList }: Props) {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    className="rounded-xl border border-[rgba(15,23,42,0.1)] px-3 py-2 text-sm hover:bg-white/40 transition-colors"
+                    className="flex items-center justify-center w-12 h-12 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white shadow-sm transition"
                     onClick={onPrevPromo}
                     aria-label="Promo anterior"
                   >
-                    ←
+                    <svg className="w-5 h-5 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
                   </button>
                   <button
                     type="button"
-                    className="rounded-xl border border-[rgba(15,23,42,0.1)] px-3 py-2 text-sm hover:bg-white/40 transition-colors"
+                    className="flex items-center justify-center w-12 h-12 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white shadow-sm transition"
                     onClick={onNextPromo}
                     aria-label="Siguiente promo"
                   >
-                    →
+                    <svg className="w-5 h-5 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                   </button>
                 </div>
               </div>
@@ -226,33 +228,55 @@ export default function ConsumerPanelClient({ data, cafesList }: Props) {
           </div>
         </div>
 
-        {/* Cafeterías cerca / explorá */}
+        {/* Cafeterías cerca / Explorar — colapsado por defecto */}
         <div className="mt-6">
-          <h2 className="mb-4 text-lg font-semibold text-[#0F172A]">Cafeterías cerca / explorá</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {cafesList.length === 0 ? (
-              <p className="text-sm text-slate-600">Próximamente más cafeterías.</p>
-            ) : (
-              cafesList.map((cafe) => (
-                <div key={cafe.id} className="flex flex-col gap-3">
-                  <CafeCard
-                    cafe={{ name: cafe.name, image_code: cafe.image_code }}
-                    tag={cafe.is_active ? "Activa" : "Inactiva"}
-                    image={cafe.image_code ? `/media/cafes/${String(cafe.image_code).padStart(2, "0")}.jpg` : "/media/cover-default.jpg"}
-                  />
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    type="button"
-                    onClick={() => setOpenCafeId(cafe.id)}
-                  >
-                    Ver info
-                  </Button>
-                </div>
-              ))
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={() => setCafesOpen((o) => !o)}
+            className="flex w-full items-center gap-3 rounded-xl border border-[rgba(15,23,42,0.10)] bg-[#F6EFE6] p-4 text-left transition hover:bg-[#EDE6DC] focus:outline-none focus:ring-2 focus:ring-red-500/40"
+            aria-expanded={isCafesOpen}
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#C0841A]/15 text-[#B45309]" aria-hidden>
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
+            </span>
+            <span className="flex-1 text-lg font-semibold text-[#0F172A]">Explorar cafeterías</span>
+            <span className="shrink-0 text-[#64748B]" aria-hidden>
+              {isCafesOpen ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+              )}
+            </span>
+          </button>
+          {isCafesOpen && (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {cafesList.length === 0 ? (
+                <p className="text-sm text-slate-600">Próximamente más cafeterías.</p>
+              ) : (
+                cafesList.map((cafe) => (
+                  <div key={cafe.id} className="flex flex-col gap-3">
+                    <CafeCard
+                      cafe={{ name: cafe.name, image_code: cafe.image_code }}
+                      tag={cafe.is_active ? "Activa" : "Inactiva"}
+                      image={cafe.image_code ? `/media/cafes/${String(cafe.image_code).padStart(2, "0")}.jpg` : "/media/cover-default.jpg"}
+                    />
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      type="button"
+                      onClick={() => setOpenCafeId(cafe.id)}
+                    >
+                      Ver info
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
           <CafeInfoModal
             open={!!openCafeId}
             cafeId={openCafeId ?? ""}
@@ -265,6 +289,31 @@ export default function ConsumerPanelClient({ data, cafesList }: Props) {
             level={tier.name}
             points={balance}
           />
+        </div>
+
+        {/* Universo — Recetas, tips y novedades */}
+        <div className="mt-6">
+          <Card className="!bg-[#F6EFE6]">
+            <CardTitle>Universo</CardTitle>
+            <CardSubtitle>Recetas, tips y novedades</CardSubtitle>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href="/app/universo-cafe"
+                className="inline-flex items-center justify-center h-10 px-4 rounded-full text-base font-semibold border border-[#C0841A]/25 bg-[#C0841A]/12 text-[#B45309] hover:bg-[#C0841A]/20 transition-colors"
+              >
+                Ver todo Universo Café
+              </Link>
+              {guidesPreview.map((guide) => (
+                <Link
+                  key={guide.id}
+                  href={`/app/universo-cafe/${guide.id}`}
+                  className="inline-flex items-center justify-center h-10 px-4 rounded-full text-sm font-medium border border-[rgba(15,23,42,0.15)] bg-white/80 text-[#0F172A] hover:bg-white transition-colors"
+                >
+                  {guide.title}
+                </Link>
+              ))}
+            </div>
+          </Card>
         </div>
 
         {/* Eventos */}

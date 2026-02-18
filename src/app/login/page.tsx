@@ -62,10 +62,11 @@ export default function LoginPage() {
             <div>
               <label className={PRO.label}>Cédula</label>
               <input
+                type="text"
                 name="cedula"
                 value={cedula}
                 onChange={(e) => setCedula(e.target.value)}
-                placeholder="Ej: 40031685"
+                placeholder="Los 8 dígitos sin guión"
                 autoComplete="off"
                 className={PRO.input}
                 inputMode="numeric"

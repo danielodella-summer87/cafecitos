@@ -70,13 +70,13 @@ async function ownerGuard(): Promise<{ cafeId: string }> {
   return { cafeId };
 }
 
-/** Listado de empleados desde public.cafe_staff (sin vista). */
+/** Listado de empleados desde public.cafe_staff; cedula desde cafe_staff o profiles (join por profile_id). */
 export async function getOwnerStaff(): Promise<CafeStaffRow[]> {
   const { cafeId } = await ownerGuard();
   const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("cafe_staff")
-    .select("id, cafe_id, full_name, name, role, is_active, can_issue, can_redeem, is_owner, cedula, created_at")
+    .select("id, cafe_id, full_name, name, role, is_active, can_issue, can_redeem, is_owner, cedula, created_at, profiles(cedula)")
     .eq("cafe_id", cafeId)
     .order("created_at", { ascending: false });
 
@@ -84,18 +84,22 @@ export async function getOwnerStaff(): Promise<CafeStaffRow[]> {
     console.error("getOwnerStaff error:", error);
     throw new Error(error.message ?? "No se pudo cargar el personal.");
   }
-  return (data ?? []).map((r: Record<string, unknown>) => ({
-    id: r.id as string,
-    cafe_id: r.cafe_id as string,
-    full_name: (r.full_name ?? r.name ?? null) as string | null,
-    role: (r.role ?? "") as string,
-    is_active: r.is_active !== false,
-    can_issue: r.can_issue !== false,
-    can_redeem: r.can_redeem !== false,
-    is_owner: !!r.is_owner,
-    cedula: (r.cedula ?? null) as string | null,
-    created_at: (r.created_at ?? null) as string | null,
-  })) as CafeStaffRow[];
+  return (data ?? []).map((r: Record<string, unknown>) => {
+    const profilesRow = r.profiles as { cedula?: string } | null | undefined;
+    const cedulaFromProfile = profilesRow?.cedula ?? null;
+    return {
+      id: r.id as string,
+      cafe_id: r.cafe_id as string,
+      full_name: (r.full_name ?? r.name ?? null) as string | null,
+      role: (r.role ?? "") as string,
+      is_active: r.is_active !== false,
+      can_issue: r.can_issue !== false,
+      can_redeem: r.can_redeem !== false,
+      is_owner: !!r.is_owner,
+      cedula: ((r.cedula ?? cedulaFromProfile) as string) || null,
+      created_at: (r.created_at ?? null) as string | null,
+    };
+  }) as CafeStaffRow[];
 }
 
 export type CreateOwnerStaffPayload = {
@@ -108,8 +112,12 @@ export type CreateOwnerStaffPayload = {
   is_active: boolean;
 };
 
-/** Alta de empleado: insert en public.cafe_staff (cedula + pin_hash). Staff NO se crea en profiles. */
-export async function createOwnerStaff(payload: CreateOwnerStaffPayload): Promise<{ ok: true; staff_id: string } | { ok: false; error: string }> {
+/** Resultado exitoso de creación: staffId y profileId. */
+export type CreateOwnerStaffSuccess = { ok: true; staffId: string; profileId: string };
+export type CreateOwnerStaffFailure = { ok: false; error: string };
+
+/** Alta de empleado en una transacción: profile (role=staff) + cafe_staff con profile_id. Usa RPC y service role. */
+export async function createOwnerStaff(payload: CreateOwnerStaffPayload): Promise<CreateOwnerStaffSuccess | CreateOwnerStaffFailure> {
   let cafeId: string;
   try {
     const g = await ownerGuard();
@@ -126,6 +134,7 @@ export async function createOwnerStaff(payload: CreateOwnerStaffPayload): Promis
   if (full_name.length < 2) return { ok: false, error: "El nombre debe tener al menos 2 caracteres." };
   if (role.length < 2) return { ok: false, error: "El rol es obligatorio." };
   if (!cedula) return { ok: false, error: "La cédula es obligatoria (solo dígitos)." };
+  if (!/^\d+$/.test(cedula)) return { ok: false, error: "La cédula debe contener solo dígitos." };
   if (!/^\d{4}$/.test(pin_4)) return { ok: false, error: "El PIN debe ser exactamente 4 dígitos." };
 
   let pin_hash: string;
@@ -136,33 +145,31 @@ export async function createOwnerStaff(payload: CreateOwnerStaffPayload): Promis
   }
 
   const supabase = supabaseAdmin();
-  const { data, error } = await supabase
-    .from("cafe_staff")
-    .insert({
-      cafe_id: cafeId,
-      full_name,
-      name: full_name,
-      role,
-      cedula,
-      pin_hash,
-      is_owner: false,
-      can_issue: payload.can_issue !== false,
-      can_redeem: payload.can_redeem !== false,
-      is_active: payload.is_active !== false,
-    })
-    .select("id")
-    .single();
+
+  const { data, error } = await supabase.rpc("create_staff_with_profile", {
+    p_cafe_id: cafeId,
+    p_full_name: full_name,
+    p_role: role || "Staff",
+    p_cedula: cedula,
+    p_pin_hash: pin_hash,
+    p_can_issue: payload.can_issue !== false,
+    p_can_redeem: payload.can_redeem !== false,
+    p_is_active: payload.is_active !== false,
+  });
 
   if (error) {
     const msg = (error as { message?: string }).message ?? error.message ?? "";
-    if (msg.includes("unique") || msg.includes("cedula") || msg.includes("duplicate") || msg.includes("already exists")) {
-      return { ok: false, error: "Ya existe un empleado con esa cédula en esta cafetería." };
-    }
     return { ok: false, error: msg || "No se pudo crear el empleado." };
   }
 
-  const staff_id = (data as { id?: string } | null)?.id ?? "";
-  return { ok: true, staff_id };
+  const raw = data as { staff_id?: string; profile_id?: string } | null;
+  const staffId = raw?.staff_id ?? "";
+  const profileId = raw?.profile_id ?? "";
+  if (!staffId || !profileId) {
+    return { ok: false, error: "No se recibió el id del empleado o del perfil." };
+  }
+
+  return { ok: true, staffId, profileId };
 }
 
 export type UpdateOwnerStaffPayload = {
