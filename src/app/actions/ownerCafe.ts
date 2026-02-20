@@ -152,7 +152,7 @@ export async function createCafeStaffOwner(input: {
   if (!session || session.role !== "owner") return { ok: false, error: "No autorizado" };
   const { getOwnerContext } = await import("@/app/actions/ownerContext");
   const ctx = await getOwnerContext();
-  if (!ctx || !ctx.capabilities.isOwner) return { ok: false, error: "Solo el dueño puede gestionar empleados" };
+  if (!ctx || !ctx.capabilities.isOwner) return { ok: false, error: "Solo el dueño puede gestionar staff" };
   const cafeId = session.cafeId ?? null;
   if (!cafeId) return { ok: false, error: "Cafetería no asociada" };
 
@@ -199,13 +199,13 @@ export async function updateCafeStaffOwner(input: {
   if (!session || session.role !== "owner") return { ok: false, error: "No autorizado" };
   const { getOwnerContext } = await import("@/app/actions/ownerContext");
   const ctx = await getOwnerContext();
-  if (!ctx || !ctx.capabilities.isOwner) return { ok: false, error: "Solo el dueño puede gestionar empleados" };
+  if (!ctx || !ctx.capabilities.isOwner) return { ok: false, error: "Solo el dueño puede gestionar staff" };
   const cafeId = session.cafeId ?? null;
   if (!cafeId) return { ok: false, error: "Cafetería no asociada" };
 
   const staff = await listCafeStaffOwner();
   const row = staff.find((s) => s.id === input.id);
-  if (!row || row.cafe_id !== cafeId) return { ok: false, error: "Empleado no encontrado." };
+  if (!row || row.cafe_id !== cafeId) return { ok: false, error: "Staff no encontrado." };
   if (row.is_owner && input.is_active === false) return { ok: false, error: "No se puede desactivar al dueño." };
 
   const updates: Record<string, unknown> = {};

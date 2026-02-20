@@ -17,7 +17,8 @@ export type OwnerTxRow = {
 };
 
 export type GetOwnerCafeTransactionsParams = {
-  days?: number;
+  /** number = últimos N días; null = todos (sin filtro de fecha) */
+  days?: number | null;
   type?: "earn" | "redeem" | "all";
   employeeId?: string;
   searchCedula?: string;
@@ -44,7 +45,9 @@ export async function getOwnerCafeTransactions(
   const cafeId = session.cafeId ?? null;
   if (!cafeId) return null;
 
-  const days = Math.min(365, Math.max(1, params.days ?? 30));
+  const wantAllTime = params.days === null;
+  const days = wantAllTime ? 30 : Math.min(365, Math.max(1, params.days ?? 30));
+  const useDateFilter = !wantAllTime;
   const type = params.type ?? "all";
   const limit = Math.min(100, Math.max(1, params.limit ?? 25));
   const offset = Math.max(0, params.offset ?? 0);
@@ -67,9 +70,12 @@ export async function getOwnerCafeTransactions(
     .from("point_transactions")
     .select("id, tx_type, amount, created_at, cafe_id, actor_owner_profile_id, from_profile_id, to_profile_id", { count: "exact" })
     .eq("cafe_id", cafeId)
-    .in("tx_type", type === "all" ? ["earn", "redeem"] : [type])
-    .gte("created_at", sinceIso)
-    .order("created_at", { ascending: false });
+    .in("tx_type", type === "all" ? ["earn", "redeem"] : [type]);
+
+  if (useDateFilter) {
+    query = query.gte("created_at", sinceIso);
+  }
+  query = query.order("created_at", { ascending: false });
 
   if (params.employeeId) {
     query = query.eq("actor_owner_profile_id", params.employeeId);

@@ -92,7 +92,7 @@ export async function ownerRedeemCafecitos(
     actorStaffId = session.staffId ?? null;
     if (!canRedeem) return { ok: false, error: "No tenés permiso para cobrar/canjear cafecitos" };
   } else {
-    return { ok: false, error: "Solo dueño o empleado pueden canjear" };
+    return { ok: false, error: "Solo dueño o staff pueden canjear" };
   }
 
   const supabase = supabaseAdmin();

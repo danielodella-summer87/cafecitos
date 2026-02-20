@@ -48,7 +48,7 @@ export async function GET() {
 
   const { data: staffData, error: staffError } = await supabase
     .from("cafe_staff")
-    .select("id, full_name, name, cedula, created_at, is_active, can_issue, can_redeem, is_owner, cafe_id")
+    .select("id, full_name, name, role, cedula, created_at, is_active, can_issue, can_redeem, is_owner, cafe_id")
     .order("cafe_id", { ascending: true })
     .order("full_name", { ascending: true });
 
@@ -68,6 +68,7 @@ export async function GET() {
 
   const rowsStaff = (staffData ?? []).map((s: Record<string, unknown>) => ({
     Rol: s.is_owner ? "owner-staff" : "staff",
+    Cargo: (s.role as string) ?? "",
     Nombre: s.full_name ?? s.name ?? "",
     Cédula: s.cedula ?? "",
     Teléfono: "",

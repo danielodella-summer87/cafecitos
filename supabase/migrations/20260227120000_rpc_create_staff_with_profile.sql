@@ -5,12 +5,13 @@
 create or replace function public.create_staff_with_profile(
   p_cafe_id uuid,
   p_full_name text,
-  p_role text,
+  p_role text,                    -- siempre 'staff' (app_role para profiles; no se usa en profile, profile va fijo 'staff')
   p_cedula text,
   p_pin_hash text,
   p_can_issue boolean default true,
   p_can_redeem boolean default true,
-  p_is_active boolean default true
+  p_is_active boolean default true,
+  p_display_role text default 'Staff'  -- rol visual en cafe_staff (Cajero, Barista, etc.)
 )
 returns json
 language plpgsql
@@ -42,21 +43,21 @@ begin
     select 1 from public.cafe_staff
     where cafe_id = p_cafe_id and cedula is not null and trim(cedula) = trim(p_cedula)
   ) then
-    raise exception 'Ya existe un empleado con esa cédula en esta cafetería.';
+    raise exception 'Ya existe un staff con esa cédula en esta cafetería.';
   end if;
 
-  -- 1) Insert profile (role staff)
+  -- 1) Insert profile (role siempre staff)
   insert into public.profiles (role, full_name, cedula, pin_hash)
   values ('staff'::public.app_role, trim(p_full_name), p_cedula, p_pin_hash)
   returning id into v_profile_id;
 
-  -- 2) Insert cafe_staff con profile_id
+  -- 2) Insert cafe_staff: rol visual desde p_display_role (Cajero, Barista, etc.)
   insert into public.cafe_staff (
     cafe_id, full_name, name, role, cedula, pin_hash, profile_id,
     is_owner, can_issue, can_redeem, is_active
   )
   values (
-    p_cafe_id, trim(p_full_name), trim(p_full_name), coalesce(nullif(trim(p_role), ''), 'Staff'),
+    p_cafe_id, trim(p_full_name), trim(p_full_name), coalesce(nullif(trim(p_display_role), ''), 'Staff'),
     p_cedula, p_pin_hash, v_profile_id,
     false, coalesce(p_can_issue, true), coalesce(p_can_redeem, true), coalesce(p_is_active, true)
   )
@@ -66,5 +67,5 @@ begin
 end;
 $$;
 
--- Permitir ejecución al service_role y a roles autenticados que usen la action
-grant execute on function public.create_staff_with_profile(uuid, text, text, text, text, boolean, boolean, boolean) to service_role;
+-- Permitir ejecución al service_role
+grant execute on function public.create_staff_with_profile(uuid, text, text, text, text, boolean, boolean, boolean, text) to service_role;

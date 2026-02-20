@@ -5,11 +5,12 @@ import { getSession } from "@/lib/auth/session";
 import { hashPin } from "@/lib/security/pin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-/** Fila de public.cafe_staff (listado y edición). */
+/** Fila de public.cafe_staff (listado y edición). role = rol visual/cargo (Cajero, Barista, etc.), no app_role. */
 export type CafeStaffRow = {
   id: string;
   cafe_id: string;
   full_name: string | null;
+  /** Rol visual en cafetería (Cajero, Barista, Encargado, etc.), no el enum app_role. */
   role: string;
   is_active: boolean;
   can_issue: boolean;
@@ -70,7 +71,7 @@ async function ownerGuard(): Promise<{ cafeId: string }> {
   return { cafeId };
 }
 
-/** Listado de empleados desde public.cafe_staff; cedula desde cafe_staff o profiles (join por profile_id). */
+/** Listado de staff desde public.cafe_staff; cedula desde cafe_staff o profiles (join por profile_id). role = cargo visual. */
 export async function getOwnerStaff(): Promise<CafeStaffRow[]> {
   const { cafeId } = await ownerGuard();
   const supabase = supabaseAdmin();
@@ -102,6 +103,7 @@ export async function getOwnerStaff(): Promise<CafeStaffRow[]> {
   }) as CafeStaffRow[];
 }
 
+/** role = rol visual/cargo para cafe_staff (Cajero, Barista, etc.). profiles.role será siempre 'staff'. */
 export type CreateOwnerStaffPayload = {
   full_name: string;
   role: string;
@@ -146,27 +148,30 @@ export async function createOwnerStaff(payload: CreateOwnerStaffPayload): Promis
 
   const supabase = supabaseAdmin();
 
+  const displayRole = (role || "Staff").trim() || "Staff";
+
   const { data, error } = await supabase.rpc("create_staff_with_profile", {
     p_cafe_id: cafeId,
     p_full_name: full_name,
-    p_role: role || "Staff",
+    p_role: "staff",
     p_cedula: cedula,
     p_pin_hash: pin_hash,
     p_can_issue: payload.can_issue !== false,
     p_can_redeem: payload.can_redeem !== false,
     p_is_active: payload.is_active !== false,
+    p_display_role: displayRole,
   });
 
   if (error) {
-    const msg = (error as { message?: string }).message ?? error.message ?? "";
-    return { ok: false, error: msg || "No se pudo crear el empleado." };
+    const msg = String((error as { message?: string }).message ?? error.message ?? "No se pudo crear el staff.");
+    return { ok: false, error: msg };
   }
 
   const raw = data as { staff_id?: string; profile_id?: string } | null;
   const staffId = raw?.staff_id ?? "";
   const profileId = raw?.profile_id ?? "";
   if (!staffId || !profileId) {
-    return { ok: false, error: "No se recibió el id del empleado o del perfil." };
+    return { ok: false, error: "No se recibió el id del staff o del perfil." };
   }
 
   return { ok: true, staffId, profileId };
@@ -181,7 +186,7 @@ export type UpdateOwnerStaffPayload = {
   can_redeem: boolean;
 };
 
-/** Editar empleado: update public.cafe_staff. No se permite cambiar cédula. */
+/** Editar staff: update public.cafe_staff. No se permite cambiar cédula. */
 export async function updateOwnerStaff(payload: UpdateOwnerStaffPayload): Promise<{ ok: true } | { ok: false; error: string }> {
   let cafeId: string;
   try {

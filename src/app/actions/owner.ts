@@ -58,7 +58,7 @@ export async function ownerAddCafecitos(input: FormData | { cedula: string; amou
     actorStaffId = session.staffId ?? null;
     if (!canIssue) throw new Error("No tenés permiso para asignar cafecitos");
   } else {
-    throw new Error("Solo dueño o empleado pueden asignar cafecitos");
+    throw new Error("Solo dueño o staff pueden asignar cafecitos");
   }
 
   const supabase = supabaseAdmin();

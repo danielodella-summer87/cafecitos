@@ -40,7 +40,7 @@ export default function OwnerStaffManager() {
     setTimeout(() => setMessage(null), 4000);
   };
 
-  // —— Agregar empleado ———
+  // —— Agregar staff ———
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
   const [addRole, setAddRole] = useState("Staff");
@@ -106,19 +106,19 @@ export default function OwnerStaffManager() {
         setAddError(null);
         await load();
         router.refresh();
-        showSuccess("Empleado creado");
+        showSuccess("Staff creado");
       } else {
-        setAddError(res.error ?? "No se pudo crear");
+        setAddError(res.error ?? "No se pudo crear el staff.");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setAddError(message || "No se pudo crear el empleado.");
+      setAddError(message || "No se pudo crear el staff.");
     } finally {
       setAddSubmitting(false);
     }
   };
 
-  // —— Editar empleado ———
+  // —— Editar staff ———
   const [editOpen, setEditOpen] = useState(false);
   const [editRow, setEditRow] = useState<CafeStaffRow | null>(null);
   const [editName, setEditName] = useState("");
@@ -198,7 +198,7 @@ export default function OwnerStaffManager() {
       if (res.ok) {
         await load();
         router.refresh();
-        showSuccess(is_active ? "Empleado activado" : "Empleado inactivado");
+        showSuccess(is_active ? "Staff activado" : "Staff inactivado");
       } else {
         setError(res.error ?? null);
       }
@@ -274,7 +274,7 @@ export default function OwnerStaffManager() {
           onClick={() => { setAddOpen(true); setAddError(null); setError(null); }}
           className="rounded-lg px-4 py-2 bg-red-600 text-white text-sm font-medium hover:bg-red-700"
         >
-          Agregar empleado
+          Agregar staff
         </button>
       </div>
 
@@ -294,7 +294,7 @@ export default function OwnerStaffManager() {
               <thead>
                 <tr className="border-b border-neutral-300">
                   <th className="p-2 font-medium">Nombre</th>
-                  <th className="p-2 font-medium">Rol</th>
+                  <th className="p-2 font-medium">Cargo</th>
                   <th className="p-2 font-medium">Cédula</th>
                   <th className="p-2 font-medium">Permisos</th>
                   <th className="p-2 font-medium">Estado</th>
@@ -305,7 +305,7 @@ export default function OwnerStaffManager() {
                 {list.map((row) => (
                   <tr key={row.id} className="border-b border-neutral-200">
                     <td className="p-2 font-medium">{row.full_name ?? "—"}</td>
-                    <td className="p-2">{row.role}</td>
+                    <td className="p-2">{row.role ?? "—"}</td>
                     <td className="p-2 font-mono text-sm">{row.cedula ?? "—"}</td>
                     <td className="p-2">
                       <span className={`inline-block rounded px-2 py-0.5 text-xs mr-1 ${row.can_issue ? "bg-green-100 text-green-800" : "bg-neutral-200 text-neutral-600"}`}>
@@ -362,7 +362,7 @@ export default function OwnerStaffManager() {
                     {row.is_active ? "Activo" : "Inactivo"}
                   </span>
                 </div>
-                <p className="text-sm text-neutral-500 mt-1">{row.role}</p>
+                <p className="text-sm text-neutral-500 mt-1">{row.role ?? "—"}</p>
                 {row.cedula && <p className="text-xs text-neutral-400 font-mono">Cédula: {row.cedula}</p>}
                 <div className="flex flex-wrap gap-1 mt-2">
                   <span className={`rounded px-2 py-0.5 text-xs ${row.can_issue ? "bg-green-100 text-green-800" : "bg-neutral-200 text-neutral-600"}`}>Asignar {row.can_issue ? "ON" : "OFF"}</span>
@@ -383,8 +383,8 @@ export default function OwnerStaffManager() {
         </>
       )}
 
-      {/* Modal Agregar empleado */}
-      <Modal open={addOpen} title="Agregar empleado" onClose={() => { setAddOpen(false); setAddError(null); setError(null); }}>
+      {/* Modal Agregar staff */}
+      <Modal open={addOpen} title="Agregar staff" onClose={() => { setAddOpen(false); setAddError(null); setError(null); }}>
         <form onSubmit={handleCreate} className="space-y-3">
           <div>
             <label className="block text-sm font-medium mb-1">Nombre (mín. 2 caracteres)</label>
@@ -398,7 +398,7 @@ export default function OwnerStaffManager() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Rol</label>
+            <label className="block text-sm font-medium mb-1">Cargo (rol en cafetería)</label>
             <select
               className="w-full border rounded-lg px-3 py-2 bg-white"
               value={addRole}
@@ -478,8 +478,8 @@ export default function OwnerStaffManager() {
         </form>
       </Modal>
 
-      {/* Modal Editar empleado */}
-      <Modal open={editOpen} title="Editar empleado" onClose={() => { setEditOpen(false); setEditRow(null); setError(null); }}>
+      {/* Modal Editar staff */}
+      <Modal open={editOpen} title="Editar staff" onClose={() => { setEditOpen(false); setEditRow(null); setError(null); }}>
         {editRow && (
           <form onSubmit={handleSaveEdit} className="space-y-3">
             <div>
@@ -493,7 +493,7 @@ export default function OwnerStaffManager() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Rol</label>
+              <label className="block text-sm font-medium mb-1">Cargo (rol en cafetería)</label>
               <input
                 className="w-full border rounded-lg px-3 py-2"
                 value={editRole}

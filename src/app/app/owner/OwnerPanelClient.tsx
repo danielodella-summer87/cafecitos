@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { logout } from "@/app/actions/logout";
 import { ownerAddCafecitos } from "@/app/actions/owner";
 import { ownerRedeemCafecitos } from "@/app/actions/ownerRedeem";
 import {
@@ -80,9 +81,9 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
   const canRedeem = capabilities.canRedeem;
 
   const [cedula, setCedula] = useState("");
-  const [amount, setAmount] = useState<number>(1);
+  const [amount, setAmount] = useState<number>(0);
   const [note, setNote] = useState("");
-  const [redeemAmount, setRedeemAmount] = useState<number>(1);
+  const [redeemAmount, setRedeemAmount] = useState<number>(0);
   const [redeemNote, setRedeemNote] = useState("");
   const [lookup, setLookup] = useState<LookupState | null>(null);
   const [lastSummary, setLastSummary] = useState<Json | null>(null);
@@ -108,7 +109,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
   const [openLast, setOpenLast] = useState(false);
 
   const [tab, setTab] = useState<"atender" | "historial">("atender");
-  const [historialDays, setHistorialDays] = useState(30);
+  const [historialDays, setHistorialDays] = useState<number | "all">(30);
   const [historialType, setHistorialType] = useState<"all" | "earn" | "redeem">("all");
   const [historialEmployeeId, setHistorialEmployeeId] = useState<string>("");
   const [historialCedula, setHistorialCedula] = useState("");
@@ -190,6 +191,10 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
   async function onAssign(e: React.FormEvent) {
     e.preventDefault();
     setStatus(null);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setStatus("Ingresá un valor mayor a 0");
+      return;
+    }
     setLoadingAssign(true);
     try {
       await ownerAddCafecitos({
@@ -208,6 +213,10 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
 
   async function onRedeem(e: React.FormEvent) {
     e.preventDefault();
+    if (!Number.isFinite(redeemAmount) || redeemAmount <= 0) {
+      setStatus("Ingresá un valor mayor a 0");
+      return;
+    }
     if (redeemBlocked) return;
     setStatus(null);
     setRedeemResult(null);
@@ -225,7 +234,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
           remaining: (lookup?.balance ?? 0) - redeemAmount,
         });
         setStatus("");
-        setRedeemAmount(1);
+        setRedeemAmount(0);
         setRedeemNote("");
         await onLookup();
       } else {
@@ -244,7 +253,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
     setLookup(null);
     setLastSummary(null);
     setStatus(null);
-    setRedeemAmount(1);
+    setRedeemAmount(0);
     setRedeemNote("Canje");
     cedulaInputRef.current?.focus();
   }
@@ -254,7 +263,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
       setHistorialLoading(true);
       try {
         const res = await getOwnerCafeTransactions({
-          days: historialDays,
+          days: historialDays === "all" ? null : historialDays,
           type: historialType,
           employeeId: historialEmployeeId || undefined,
           searchCedula: historialCedula.trim() || undefined,
@@ -323,18 +332,14 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
   const formatDate = (iso: string) =>
     new Intl.DateTimeFormat("es-UY", { dateStyle: "short", timeStyle: "short" }).format(new Date(iso));
 
-  const handleBackToOwnerPanel = useCallback(() => {
-    setTab("atender");
-  }, []);
-
   const exportHistorialXls = useCallback(() => {
     const nn = myCafe ? String(myCafe.image_code ?? "").padStart(2, "0") : "00";
     const safeName = (myCafe?.name ?? "cafe").replace(/\W+/g, "_").slice(0, 40);
-    const range = `${historialDays}d`;
+    const range = historialDays === "all" ? "all" : `${historialDays}d`;
     const base = `historial_${nn}-${safeName}_${range}`;
     const filename = `${base}.xls`;
 
-    const headers = ["Tipo", "Cantidad", "Cliente (cédula)", "Cliente (nombre)", "Empleado", "Fecha/hora"];
+    const headers = ["Tipo", "Cantidad", "Cliente (cédula)", "Cliente (nombre)", "Staff", "Fecha/hora"];
     const escape = (s: string) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     const rows = historialRows.map((r) => [
       r.tx_type === "earn" ? "Asignado" : "Cobrado",
@@ -367,24 +372,20 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
     <div className={PRO.page}>
       <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-3xl font-semibold">Panel de la cafetería</h1>
-        {tab !== "atender" && (
-          <button
-            type="button"
-            onClick={handleBackToOwnerPanel}
-            className="bg-red-600 text-white rounded-full px-4 py-2 text-sm font-medium hover:bg-red-700"
-          >
+        <h1 className="text-xl font-semibold text-[#0F172A]">Panel Cafetería</h1>
+        <form action={logout}>
+          <button type="submit" className="bg-red-600 text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-red-700 active:bg-red-800 shadow-sm">
             Salir
           </button>
-        )}
+        </form>
       </div>
-      <p className="mt-2 text-3xl font-semibold text-red-500">
+      <p className="mt-1 text-2xl font-semibold text-red-600">
         {myCafe
           ? `${String(myCafe.image_code ?? "").padStart(2, "0")} - ${myCafe.name || "Cafetería sin nombre"}`
           : "Cafetería sin nombre"}
       </p>
 
-      <div className="flex gap-2 border-b border-neutral-200 mb-4">
+      <div className="flex flex-wrap gap-2 border-b border-neutral-200 mb-4">
         <button
           type="button"
           onClick={() => setTab("atender")}
@@ -393,13 +394,26 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
           Gestión
         </button>
         {isOwner && (
-          <button
-            type="button"
-            onClick={() => setTab("historial")}
-            className={`px-4 py-2 font-medium rounded-t-md transition-colors ${tab === "historial" ? "bg-red-600 text-white" : "bg-[#F6EFE6] text-neutral-700 hover:bg-neutral-200"}`}
-          >
-            Historial
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => setTab("historial")}
+              className={`px-4 py-2 font-medium rounded-t-md transition-colors ${tab === "historial" ? "bg-red-600 text-white" : "bg-[#F6EFE6] text-neutral-700 hover:bg-neutral-200"}`}
+            >
+              Historial
+            </button>
+            <span className="inline-flex flex-col items-center">
+              <button
+                type="button"
+                disabled
+                className="px-4 py-2 font-medium rounded-t-md bg-neutral-200 text-neutral-500 cursor-not-allowed"
+                title="Próximamente"
+              >
+                Carta de cafetería
+              </button>
+              <span className="text-xs text-neutral-500 mt-0.5">Próximamente</span>
+            </span>
+          </>
         )}
       </div>
 
@@ -416,7 +430,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
             </div>
           )}
           <div className="flex flex-wrap gap-2">
-            {[7, 30, 90].map((d) => (
+            {([7, 30, 90] as const).map((d) => (
               <button
                 key={d}
                 type="button"
@@ -445,6 +459,32 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
                 {d === 7 ? "7 días" : d === 30 ? "30 días" : "90 días"}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => {
+                setHistorialDays("all");
+                setHistorialOffset(0);
+                setHistorialLoading(true);
+                getOwnerCafeTransactions({
+                  days: null,
+                  type: historialType,
+                  employeeId: historialEmployeeId || undefined,
+                  searchCedula: historialCedula.trim() || undefined,
+                  limit: 25,
+                  offset: 0,
+                }).then((res) => {
+                  if (res) {
+                    setHistorialRows(res.rows);
+                    setHistorialTotalCount(res.totalCount);
+                    if (res.summary30d) setHistorialSummary30d(res.summary30d);
+                    setHistorialOffset(25);
+                  }
+                }).finally(() => setHistorialLoading(false));
+              }}
+              className={`rounded-full px-3 py-1 text-sm ${historialDays === "all" ? "bg-red-600 text-white" : "bg-white border border-neutral-300 hover:bg-neutral-100"}`}
+            >
+              Todos
+            </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
@@ -460,7 +500,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Empleado</label>
+              <label className="block text-sm font-medium mb-1">Staff</label>
               <select
                 value={historialEmployeeId}
                 onChange={(e) => setHistorialEmployeeId(e.target.value)}
@@ -511,7 +551,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
                   <th className="p-2 font-medium">Tipo</th>
                   <th className="p-2 font-medium">Cantidad</th>
                   <th className="p-2 font-medium">Cliente</th>
-                  <th className="p-2 font-medium">Empleado</th>
+                  <th className="p-2 font-medium">Staff</th>
                   <th className="p-2 font-medium">Fecha</th>
                 </tr>
               </thead>
@@ -559,7 +599,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
                     <span className="text-neutral-500">Cliente:</span> {[r.client_cedula, r.client_name].filter(Boolean).join(" — ") || "—"}
                   </div>
                   <div className="text-sm">
-                    <span className="text-neutral-500">Empleado:</span> {r.employee_name ?? "—"}
+                    <span className="text-neutral-500">Staff:</span> {r.employee_name ?? "—"}
                   </div>
                   <div className="text-xs text-neutral-500 mt-1">{formatDate(r.created_at)}</div>
                 </div>
@@ -764,10 +804,10 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
               setLoadingLookup(false);
             }
           }}
-          className="mt-2 w-full rounded bg-black text-white py-2 disabled:opacity-50"
+          className="mt-2 w-full rounded-xl bg-red-600 text-white py-2 font-semibold hover:bg-red-700 active:bg-red-800 disabled:opacity-50"
           disabled={loadingLookup}
         >
-          {loadingLookup ? "Buscando..." : "Buscar"}
+          {loadingLookup ? "Buscando…" : "Buscar"}
         </button>
 
         {status ? <p className="mt-2 text-sm text-red-600">{status}</p> : null}
@@ -788,7 +828,8 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
             </p>
 
             <button
-              className="mt-4 px-4 py-2 bg-black text-white rounded"
+              type="button"
+              className="mt-4 px-4 py-2 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700"
               onClick={() => {
                 setRedeemSuccess(null);
                 setLookup(null);
