@@ -5,9 +5,10 @@ import { useEffect, useRef, useCallback } from "react";
 import { upsertGuideView } from "@/app/actions/coffeeGuides";
 import { normalizeCoffeeContent, type CoffeeBlock } from "@/lib/coffeeContent";
 import { getGuideCover, GENERIC_COVER } from "@/lib/universoCafeCovers";
+import { AppMark } from "@/components/brand/AppMark";
 
 const SECTION_STYLES: Record<string, { icon: string; box: string }> = {
-  neutral: { icon: "☕", box: "bg-gray-50 border-gray-200 text-gray-900" },
+  neutral: { icon: "logo", box: "bg-gray-50 border-gray-200 text-gray-900" },
   info: { icon: "ℹ️", box: "bg-blue-50 border-blue-200 text-blue-900" },
   tip: { icon: "💡", box: "bg-yellow-50 border-yellow-200 text-yellow-900" },
   warning: { icon: "⚠️", box: "bg-orange-50 border-orange-200 text-orange-900" },
@@ -102,7 +103,7 @@ export default function GuideContent({
             className={`mt-4 rounded-2xl border px-4 py-3 first:mt-0 ${style.box}`}
           >
             <div className="flex items-center gap-2 font-semibold text-lg">
-              <span>{icon}</span>
+              {icon === "logo" ? <AppMark iconOnly iconSize={18} /> : <span>{icon}</span>}
               <span>{block.title}</span>
             </div>
           </div>

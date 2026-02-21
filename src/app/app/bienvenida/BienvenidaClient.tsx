@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { markWelcomeSeen } from "@/app/actions/onboarding";
 import { getWelcomeCode } from "@/app/actions/auth";
-import AppName from "@/app/ui/AppName";
+import { AppMark } from "@/components/brand/AppMark";
 
 export default function BienvenidaClient() {
   const router = useRouter();
@@ -45,7 +45,7 @@ export default function BienvenidaClient() {
 
   return (
     <div className="mx-auto max-w-xl px-5 py-10">
-      <h1 className="text-3xl font-semibold tracking-tight">👋 Bienvenido a <AppName /></h1>
+      <h1 className="text-3xl font-semibold tracking-tight">👋 Bienvenido a <AppMark /></h1>
       <p className="mt-2 text-neutral-600">Te contamos en 30 segundos cómo funciona.</p>
 
       {welcomeCode && (
@@ -69,7 +69,10 @@ export default function BienvenidaClient() {
         </div>
 
         <div className="rounded-2xl border bg-white p-5 shadow-sm">
-          <div className="font-semibold">☕ Cómo canjeás</div>
+          <div className="flex items-center gap-2 font-semibold">
+          <AppMark iconOnly iconSize={18} />
+          Cómo canjeás
+        </div>
           <div className="mt-1 text-neutral-700">
             Cuando llegás al mínimo requerido, podés canjear por un café (o beneficio disponible).
           </div>

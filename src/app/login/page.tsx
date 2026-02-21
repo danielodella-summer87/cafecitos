@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { loginUser } from "@/app/actions/auth";
 import { PRO } from "@/lib/ui/pro";
-import AppName from "@/app/ui/AppName";
+import { AppMark } from "@/components/brand/AppMark";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -54,7 +54,7 @@ export default function LoginPage() {
             />
           </div>
 
-          <h1 className={PRO.h1}><AppName /></h1>
+          <h1 className={PRO.h1}><AppMark /></h1>
           <div className={PRO.divider} />
           <p className={PRO.subtitle}>Accede con tu cédula y pin de 4 dígitos.</p>
 

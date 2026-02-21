@@ -21,7 +21,7 @@ export function getTxMeta(type: TxType): TxMeta {
     case "earn":
       return {
         label: "Sumar cafecitos",
-        icon: "☕️",
+        icon: "logo",
         color: "text-green-700",
       };
     case "redeem":

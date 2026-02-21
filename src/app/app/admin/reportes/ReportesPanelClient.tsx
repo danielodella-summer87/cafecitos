@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { KpisSummaryRow, CafeKpiRow, DailyKpiRow, TopClienteGlobalRow, AlertRow, PanelClienteGlobalRow } from "@/app/actions/adminReports";
-import AppName from "@/app/ui/AppName";
+import { AppMark } from "@/components/brand/AppMark";
 
 function fmtInt(n: unknown) {
   const num = Number(n ?? 0);
@@ -233,7 +233,7 @@ export default function ReportesPanelClient({
               subtitle={`Earn: ${fmtInt(k.earn_30d)} · Redeem: ${fmtInt(k.redeem_30d)}`}
             />
             <KpiCard
-              title={<><AppName /> netos (30d)</>}
+              title={<><AppMark /> netos (30d)</>}
               value={fmtInt(k.neto_30d)}
               subtitle={`Generado: ${fmtInt(k.generado_30d)} · Canjeado: ${fmtInt(k.canjeado_30d)}`}
             />
@@ -299,7 +299,10 @@ export default function ReportesPanelClient({
 
           {/* RENDIMIENTO POR CAFETERÍA */}
           <section className="bg-white rounded-xl shadow overflow-hidden">
-            <div className="p-4 border-b font-semibold">☕ Rendimiento por Cafetería (30 días)</div>
+            <div className="flex items-center gap-2 p-4 border-b font-semibold">
+            <AppMark iconOnly iconSize={18} />
+            Rendimiento por Cafetería (30 días)
+          </div>
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>

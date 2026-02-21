@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -10,8 +10,8 @@ import type { ConsumerSummaryResult, ConsumerTx, CafeMapItem } from "@/app/actio
 import { redeemWelcomeGift } from "@/app/actions/consumerSummary";
 import type { CafeListItem } from "@/app/actions/cafes";
 import type { CoffeeGuide } from "@/app/actions/coffeeGuides";
+import { getClientTiersForDisplay, type TierRow } from "@/app/actions/adminReports";
 import { getTxMeta } from "@/lib/ui/txLabels";
-import { getMembershipTier, getNextTierInfo } from "@/lib/ui/membership";
 import {
   Container,
   PageHeader,
@@ -21,11 +21,9 @@ import {
   Button,
 } from "@/app/ui/components";
 import { PromoCard, CafeCard } from "@/app/ui/media";
-import AppName from "@/app/ui/AppName";
+import { AppMark } from "@/components/brand/AppMark";
 import CafeInfoModal from "./CafeInfoModal";
 import LevelInfoModal from "./LevelInfoModal";
-
-const BENEFIT_TARGET = 100;
 
 const PROMOS_MOCK: Array<{ id: string; image: string; title: string; description: string; cafes: string[] }> = [
   { id: "1", image: "https://images.unsplash.com/photo-1509042239860-f550ce710b93", title: "Desayuno 2x1", description: "Solo esta semana en cafeterías adheridas.", cafes: ["Portofino", "Gastolandia"] },
@@ -47,6 +45,24 @@ function cafeName(cafeId: string | null, cafesMap: Record<string, CafeMapItem>):
   return cafesMap[cafeId]?.name ?? "(sin cafetería)";
 }
 
+/** Calcula nivel actual y siguiente por puntos (tiers ya ordenados por sort_order / min_points). */
+function getTierByPoints(tiers: TierRow[], points: number): {
+  currentTier: TierRow | null;
+  nextTier: TierRow | null;
+  remaining: number;
+} {
+  const pts = Number.isFinite(points) ? Math.max(0, points) : 0;
+  if (!tiers.length) return { currentTier: null, nextTier: null, remaining: 0 };
+  let current: TierRow = tiers[0];
+  for (const t of tiers) {
+    if (pts >= t.min_points) current = t;
+  }
+  const currentIndex = tiers.findIndex((t) => t.id === current.id);
+  const nextTier = currentIndex >= 0 && currentIndex < tiers.length - 1 ? tiers[currentIndex + 1] : null;
+  const remaining = nextTier ? Math.max(0, nextTier.min_points - pts) : 0;
+  return { currentTier: current, nextTier, remaining };
+}
+
 export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [] }: Props) {
   const router = useRouter();
   const params = useSearchParams();
@@ -54,17 +70,30 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
   const [openCafeId, setOpenCafeId] = useState<string | null>(null);
   const [openLevelInfo, setOpenLevelInfo] = useState(false);
   const [isCafesOpen, setCafesOpen] = useState(false);
+  const [clientTiers, setClientTiers] = useState<TierRow[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    getClientTiersForDisplay().then((tiers) => {
+      if (mounted) setClientTiers(tiers);
+    });
+    return () => { mounted = false; };
+  }, []);
 
   const { session, balance, last10, generatedTotal, redeemedTotal, cafesMap, welcomeGiftRedeemed } = data;
-  const missing = Math.max(0, BENEFIT_TARGET - balance);
 
   const [welcomeCode, setWelcomeCode] = useState("");
   const [welcomeLoading, setWelcomeLoading] = useState(false);
   const [welcomeError, setWelcomeError] = useState<string | null>(null);
   const [justRedeemed, setJustRedeemed] = useState(false);
-  const progressPct = Math.min(100, (balance / BENEFIT_TARGET) * 100);
-  const tier = getMembershipTier(balance);
-  const next = getNextTierInfo(balance);
+
+  const { currentTier, nextTier, remaining: nextTierRemaining } = getTierByPoints(clientTiers, balance);
+  const tierDisplayName = currentTier?.name ?? "—";
+  const nextTierName = nextTier?.name ?? null;
+  const progressToNext =
+    nextTier && currentTier && nextTier.min_points > currentTier.min_points
+      ? Math.min(100, (Math.max(0, balance - currentTier.min_points) / (nextTier.min_points - currentTier.min_points)) * 100)
+      : 100;
 
   const promos = PROMOS_MOCK;
   const promoScrollRef = useRef<HTMLDivElement>(null);
@@ -114,7 +143,7 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
     <main>
       <Container>
         <PageHeader
-          title={<AppName className="text-2xl font-semibold tracking-tight text-[#0F172A]" />}
+          title={<AppMark className="text-2xl font-semibold tracking-tight text-[#0F172A]" iconSize={32} />}
           subtitle="Tu universo de cafés, beneficios y experiencias."
           rightSlot={rightSlot}
         />
@@ -200,65 +229,115 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
 
         {/* Primera fila: 25% izquierda (Saldo, Nivel, Próximo beneficio, Generado) + 75% derecha (carrusel promos) */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-          {/* IZQUIERDA (25%) */}
+          {/* IZQUIERDA (25%) — Una card unificada: nivel + métricas */}
           <div className="md:col-span-3">
-            <div className="space-y-4">
-              <Card className="!bg-[#F6EFE6]">
-                <CardTitle>Saldo disponible</CardTitle>
-                <div className="mt-3 flex items-end gap-3">
-                  <div className="text-3xl font-semibold text-[#0F172A]">☕ {balance ?? 0}</div>
-                  <div className="text-sm text-slate-600 pb-1">disponibles</div>
-                </div>
-              </Card>
-
-              <Card className="!bg-[#F6EFE6]">
-                <CardTitle>Tu nivel</CardTitle>
-                <div className="mt-3">
+            <Card className="mb-4 !bg-[#F6EFE6] p-4 space-y-3">
+              {/* FILA 1 — NIVEL */}
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-slate-900">Tu nivel</span>
+                  <span className="text-slate-400" aria-hidden>•</span>
                   <button
                     type="button"
                     onClick={() => setOpenLevelInfo(true)}
-                    className="relative z-10 inline-flex items-center justify-center gap-2 h-10 px-4 rounded-full text-base font-semibold border bg-[#C0841A]/12 text-[#B45309] border-[#C0841A]/25 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-1 hover:bg-[#C0841A]/20 transition-colors"
-                    aria-label={`Ver información del nivel ${tier.name}`}
+                    className="inline-flex items-center gap-1.5 rounded-full border bg-[#C0841A]/12 px-3 py-1 text-sm font-semibold text-[#B45309] border-[#C0841A]/25 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-1 hover:bg-[#C0841A]/20 transition-colors"
+                    aria-label={`Ver información del nivel ${tierDisplayName}`}
                   >
-                    <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${tier.dotClass}`} aria-hidden />
-                    {tier.name}
+                    <span
+                      className="h-2 w-2 rounded-full shrink-0"
+                      style={{ backgroundColor: currentTier?.dot_color ?? "#C0841A" }}
+                      aria-hidden
+                    />
+                    {tierDisplayName}
                   </button>
                 </div>
-                {next.nextName && next.remaining > 0 ? (
-                  <div className="mt-2 text-sm text-slate-600">
-                    Faltan <strong className="text-[#0F172A]">{next.remaining}</strong> para {next.nextName}
-                  </div>
-                ) : null}
-              </Card>
-
-              <Card className="!bg-[#F6EFE6]">
-                <CardTitle>Próximo beneficio</CardTitle>
-                <div className="mt-2 text-sm text-slate-700">
-                  {missing === 0 ? (
-                    <p className="font-medium text-[#16A34A]">¡Alcanzaste tu próximo café gratis!</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {nextTier ? (
+                    <>Faltan <strong className="text-slate-700">{nextTierRemaining}</strong> para <strong>{nextTierName}</strong></>
                   ) : (
-                    <>
-                      <p>Te faltan <strong>{missing}</strong> cafecitos para tu próximo café gratis.</p>
-                      <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-[#E2E8F0]">
-                        <div
-                          className="h-full rounded-full bg-[#16A34A] transition-all"
-                          style={{ width: `${progressPct}%` }}
-                        />
-                      </div>
-                      <p className="mt-1 text-xs text-slate-600">{Math.round(progressPct)}%</p>
-                    </>
+                    <>¡Máximo nivel alcanzado!</>
                   )}
+                </p>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#E2E8F0]">
+                  <div
+                    className="h-full rounded-full bg-[#16A34A] transition-all"
+                    style={{ width: `${progressToNext}%` }}
+                  />
                 </div>
-              </Card>
+                <div className="mt-1 flex items-center justify-between text-[13px] text-slate-500">
+                  <span>{Math.round(progressToNext)}%</span>
+                  {nextTier ? (
+                    <span>Nivel {nextTier.badge_label ?? nextTier.name}</span>
+                  ) : currentTier?.badge_message ? (
+                    <span>{currentTier.badge_message}</span>
+                  ) : null}
+                </div>
+              </div>
 
-              <Card className="!bg-[#F6EFE6]">
-                <CardTitle>Generado total</CardTitle>
-                <div className="mt-3 text-2xl font-semibold text-[#0F172A]">
-                  ☕ {generatedTotal ?? 0}
+              {/* FILA 2 — MÉTRICAS (2 columnas) */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Generado total</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <AppMark iconOnly iconSize={28} />
+                    <span className="text-lg font-semibold text-[#0F172A]">{generatedTotal ?? 0}</span>
+                  </div>
+                  <p className="text-xs text-slate-500">acumulados</p>
                 </div>
-                <div className="mt-1 text-sm text-slate-600">acumulados</div>
-              </Card>
-            </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Saldo disponible</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <AppMark iconOnly iconSize={28} />
+                    <span className="text-lg font-semibold text-[#0F172A]">{balance ?? 0}</span>
+                  </div>
+                  <p className="text-xs text-slate-500">disponibles</p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Acciones rápidas */}
+            <Card className="mb-6 !bg-[#F6EFE6] p-4">
+              <div className="flex items-baseline justify-between">
+                <h3 className="text-sm font-semibold text-slate-900">Acciones rápidas</h3>
+                <span className="text-[12px] text-slate-500">Atajos</span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <div>
+                  <button
+                    type="button"
+                    disabled
+                    className="h-10 w-full rounded-xl text-sm font-semibold transition-all bg-red-600/70 text-white opacity-50 cursor-not-allowed"
+                  >
+                    Canjear
+                  </button>
+                  <p className="mt-0.5 text-[11px] text-slate-500">Próximamente</p>
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    disabled
+                    className="h-10 w-full rounded-xl text-sm font-semibold transition-all bg-white/70 text-slate-900 ring-1 ring-black/10 opacity-50 cursor-not-allowed"
+                  >
+                    Sumar
+                  </button>
+                  <p className="mt-0.5 text-[11px] text-slate-500">Próximamente</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => document.getElementById("seccion-movimientos")?.scrollIntoView({ behavior: "smooth" })}
+                  className="h-10 w-full rounded-xl text-sm font-semibold transition-all bg-transparent text-slate-700 ring-1 ring-black/10 hover:bg-white/50"
+                >
+                  Ver historial
+                </button>
+                <button
+                  type="button"
+                  onClick={() => document.getElementById("seccion-explorar")?.scrollIntoView({ behavior: "smooth" })}
+                  className="h-10 w-full rounded-xl text-sm font-semibold transition-all bg-transparent text-slate-700 ring-1 ring-black/10 hover:bg-white/50"
+                >
+                  Explorar
+                </button>
+              </div>
+            </Card>
           </div>
 
           {/* DERECHA (75%) - Carrusel promos */}
@@ -324,7 +403,7 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
           >
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-baseline gap-2">
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">Explorar cafeterías</span>
+                <span className="min-w-0 flex-1 truncate text-base font-semibold text-slate-900">Explorar cafeterías</span>
               </div>
               <div className="mt-2">
                 <div className="relative h-[72px] w-full overflow-hidden rounded-xl transition-all duration-300 ease-out">
@@ -391,7 +470,8 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
           <LevelInfoModal
             open={openLevelInfo}
             onClose={() => setOpenLevelInfo(false)}
-            level={tier.name}
+            tiers={clientTiers}
+            tierSlug={currentTier?.slug ?? ""}
             points={balance}
           />
         </div>
@@ -403,9 +483,12 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
               <summary className="group flex cursor-pointer list-none items-start justify-between gap-4 p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2 rounded-[1rem]">
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-baseline gap-2">
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">☕ Universo Café</span>
-                    <span className="shrink-0 text-[12px] text-slate-500">•</span>
-                    <span className="min-w-0 flex-1 truncate text-[12px] text-slate-500">Recetas, métodos y preparaciones</span>
+                    <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                    <AppMark iconOnly iconSize={32} />
+                    <span className="truncate text-base font-semibold text-slate-900">Universo Café</span>
+                  </span>
+                    <span className="shrink-0 text-sm text-slate-500">•</span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-500">Recetas, métodos y preparaciones</span>
                   </div>
                   <div className="mt-2">
                     <div className="relative h-[72px] w-full overflow-hidden rounded-xl transition-all duration-300 ease-out">
@@ -472,9 +555,9 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
               <summary className="group flex cursor-pointer list-none items-start justify-between gap-4 p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2 rounded-[1rem]">
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-baseline gap-2">
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">Eventos esta semana</span>
-                    <span className="shrink-0 text-[12px] text-slate-500">•</span>
-                    <span className="min-w-0 flex-1 truncate text-[12px] text-slate-500">Próximamente</span>
+                    <span className="min-w-0 flex-1 truncate text-base font-semibold text-slate-900">Eventos esta semana</span>
+                    <span className="shrink-0 text-sm text-slate-500">•</span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-500">Próximamente</span>
                   </div>
                   <div className="mt-2">
                     <div className="relative h-[72px] w-full overflow-hidden rounded-xl transition-all duration-300 ease-out">
@@ -520,9 +603,9 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
               <summary className="group flex cursor-pointer list-none items-start justify-between gap-4 p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2 rounded-[1rem]">
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-baseline gap-2">
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">Canjeado total</span>
-                    <span className="shrink-0 text-[12px] text-slate-500">•</span>
-                    <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-orange-600">−{redeemedTotal}</span>
+                    <span className="min-w-0 flex-1 truncate text-base font-semibold text-slate-900">Canjeado total</span>
+                    <span className="shrink-0 text-sm text-slate-500">•</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-orange-600">−{redeemedTotal}</span>
                   </div>
                   <div className="mt-2">
                     <div className="relative h-[72px] w-full overflow-hidden rounded-xl transition-all duration-300 ease-out">
@@ -562,12 +645,16 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
         </div>
 
         {/* Últimos movimientos */}
-        <Card className="mt-6">
+        <div id="seccion-movimientos" className="scroll-mt-4">
+          <Card className="mt-6">
           <details className="group">
             <summary className="group flex cursor-pointer list-none items-start justify-between gap-4 p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2 rounded-[1rem]">
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 items-baseline gap-2">
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">☕ Últimos movimientos</span>
+                  <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                  <AppMark iconOnly iconSize={32} />
+                  <span className="truncate text-base font-semibold text-slate-900">Últimos movimientos</span>
+                </span>
                 </div>
                 <div className="mt-2">
                   <div className="relative h-[72px] w-full overflow-hidden rounded-xl transition-all duration-300 ease-out">
@@ -611,7 +698,8 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
               )}
             </div>
           </details>
-        </Card>
+          </Card>
+        </div>
 
         {debug && (
           <div className="mt-6 rounded-xl border border-[rgba(15,23,42,0.10)] bg-[#F8FAFC] p-4">
@@ -658,11 +746,12 @@ function MovementRow({
   return (
     <li className="flex items-center justify-between gap-4 border-b border-[rgba(15,23,42,0.06)] py-2 last:border-0">
       <div className="min-w-0 flex-1">
-        <p className={`text-sm font-medium ${meta.color}`}>
-          {meta.icon} {meta.label}
+        <p className={`flex items-center gap-1.5 text-sm font-medium ${meta.color}`}>
+          {meta.icon === "logo" ? <AppMark iconOnly iconSize={28} /> : meta.icon}{" "}
+          {meta.label}
         </p>
         <p className="text-sm text-[#64748B]">{cafeLabel}</p>
-        <p className="text-xs text-[#64748B]">
+        <p className="text-sm text-[#64748B]">
           {tx.note ?? "—"} · {dateStr}
         </p>
       </div>

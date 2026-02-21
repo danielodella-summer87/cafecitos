@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Container, PageHeader, Button } from "@/app/ui/components";
+import { AppMark } from "@/components/brand/AppMark";
 import CafeForm from "../../CafeForm";
 
 type StaffRow = {
@@ -55,7 +56,7 @@ export default function EditCafeClient({
       <PageHeader
         title={
           <span className="inline-flex items-center gap-2">
-            <span>☕</span>
+            <AppMark iconOnly iconSize={18} />
             <span>Editar cafetería</span>
           </span>
         }

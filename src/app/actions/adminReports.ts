@@ -831,6 +831,21 @@ export async function getClientTiers(): Promise<TierRow[]> {
   return (data ?? []) as TierRow[];
 }
 
+/** Tiers de clientes para mostrar en UI (consumer modal, etc.). Misma fuente que admin; sin adminGuard. Solo activos, orden por sort_order. */
+export async function getClientTiersForDisplay(): Promise<TierRow[]> {
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase
+    .from("tiers")
+    .select("id,slug,name,min_points,badge_label,badge_message,dot_color,sort_order,is_active")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
+  if (error) {
+    console.error("getClientTiersForDisplay", error);
+    return [];
+  }
+  return (data ?? []) as TierRow[];
+}
+
 export async function getCafeTiers(): Promise<CafeTierRowNiveles[]> {
   await adminGuard();
   const supabase = supabaseAdmin();

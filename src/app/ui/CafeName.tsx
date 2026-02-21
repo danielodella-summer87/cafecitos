@@ -1,4 +1,7 @@
+"use client";
+
 import React from "react";
+import { AppMark } from "@/components/brand/AppMark";
 
 type CafeLike = {
   name?: string | null;
@@ -29,7 +32,7 @@ export default function CafeName({
 
   return (
     <span className={className}>
-      {showCup ? <span className="mr-2">☕</span> : null}
+      {showCup ? <AppMark iconOnly iconSize={32} className="mr-2" /> : null}
       <span className={codeClassName || "font-semibold"}>{code}</span>
       <span>{sep}</span>
       <span>{name}</span>

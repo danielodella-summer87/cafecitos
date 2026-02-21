@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { PRO } from "@/lib/ui/pro";
-import AppName from "@/app/ui/AppName";
+import { AppMark } from "@/components/brand/AppMark";
 
 export default function WelcomeClient(props: {
   name: string;
@@ -29,7 +29,7 @@ export default function WelcomeClient(props: {
               className="h-12 w-auto"
             />
             <div className="min-w-0">
-              <div className="text-sm text-neutral-500"><AppName /></div>
+              <div className="text-sm text-neutral-500"><AppMark /></div>
               <h1 className="text-2xl font-semibold text-neutral-900 truncate">
                 {displayName}
               </h1>
@@ -67,7 +67,7 @@ export default function WelcomeClient(props: {
             <div className="rounded-xl border border-neutral-200 p-4">
               <div className="text-xs text-neutral-500">Tus cafecitos</div>
               <div className="text-3xl font-semibold text-neutral-900 mt-1">
-                ☕ {props.balance}
+                <><AppMark iconOnly iconSize={18} /> {props.balance}</>
               </div>
               <div className="text-xs text-neutral-500 mt-1">
                 Saldo global disponible

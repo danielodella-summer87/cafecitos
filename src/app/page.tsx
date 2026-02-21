@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import AppName from "@/app/ui/AppName";
+import { AppMark } from "@/components/brand/AppMark";
 
 export default function Home() {
   const [status, setStatus] = useState("Probando conexión con Supabase...");
@@ -30,7 +30,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-8">
-      <h1 className="text-2xl font-semibold"><AppName /></h1>
+      <h1 className="text-2xl font-semibold"><AppMark /></h1>
       <p className="mt-4">{status}</p>
     </main>
   );

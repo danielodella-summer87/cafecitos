@@ -7,7 +7,7 @@ import {
   getAdminCafeDailyKpis,
   getAdminCafeTopClients7d,
 } from "@/app/actions/adminReports";
-import AppName from "@/app/ui/AppName";
+import { AppMark } from "@/components/brand/AppMark";
 import CafeName from "@/app/ui/CafeName";
 
 type Props = { params: Promise<{ id: string }> };
@@ -58,7 +58,7 @@ export default async function CafeReportPage({ params }: Props) {
           subtitle={`Clientes únicos: ${fmtInt(k.clientes_unicos_30d)}`}
         />
         <KpiCard
-          title={<><AppName /> netos (30d)</>}
+          title={<><AppMark /> netos (30d)</>}
           value={fmtInt(k.neto_30d)}
           subtitle={`Generado: ${fmtInt(k.generado_30d)} · Canjeado: ${fmtInt(k.canjeado_30d)}`}
         />

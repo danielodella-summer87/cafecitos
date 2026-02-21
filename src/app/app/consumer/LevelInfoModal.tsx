@@ -1,50 +1,21 @@
 "use client";
 
 import { useEffect } from "react";
-import {
-  MEMBERSHIP_TIERS,
-  getMembershipTier,
-  getNextTierInfo,
-  type MembershipTier,
-} from "@/lib/ui/membership";
+import { AppMark } from "@/components/brand/AppMark";
+import type { TierRow } from "@/app/actions/adminReports";
 import { Button } from "@/app/ui/components";
-
-const BENEFITS_BY_KEY: Record<MembershipTier["key"], string[]> = {
-  bronce: [
-    "Sumás 1 cafecito por compra",
-    "Acceso al programa de beneficios",
-    "Podés canjear cuando llegues a 100",
-  ],
-  plata: [
-    "Sumás más cafecitos por compra",
-    "Promociones exclusivas",
-    "Acelerás camino al siguiente nivel",
-  ],
-  oro: [
-    "Cafecitos extra en cada visita",
-    "Descuentos en combos",
-    "Acceso anticipado a promos",
-  ],
-  reserva: [
-    "Beneficios exclusivos",
-    "Eventos reservados",
-    "Experiencia premium",
-  ],
-  leyenda: [
-    "Generás más cafecitos por compra",
-    "Acceso anticipado a promos",
-    "Eventos exclusivos y sorpresas especiales",
-  ],
-};
 
 type LevelInfoModalProps = {
   open: boolean;
   onClose: () => void;
-  level: string;
+  /** Tiers del sistema (misma fuente que admin), ordenados por sort_order. */
+  tiers: TierRow[];
+  /** Slug del nivel actual del cliente (viene de profiles.tier_id → tiers.slug). */
+  tierSlug: string;
   points: number;
 };
 
-export default function LevelInfoModal({ open, onClose, level, points }: LevelInfoModalProps) {
+export default function LevelInfoModal({ open, onClose, tiers, tierSlug, points }: LevelInfoModalProps) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -55,12 +26,15 @@ export default function LevelInfoModal({ open, onClose, level, points }: LevelIn
 
   if (!open) return null;
 
-  const tier = getMembershipTier(points);
-  const next = getNextTierInfo(points);
-  const benefits = BENEFITS_BY_KEY[tier.key] ?? [];
+  const currentIndex = tiers.findIndex((t) => t.slug === tierSlug);
+  const currentTier = currentIndex >= 0 ? tiers[currentIndex] : null;
+  const nextTier = currentIndex >= 0 && currentIndex < tiers.length - 1 ? tiers[currentIndex + 1] : null;
+  const displayName = currentTier?.name ?? tierSlug;
+  const description = (currentTier?.badge_message ?? "").trim() || "Beneficios según tu nivel en el programa.";
+  const remaining = nextTier ? Math.max(0, nextTier.min_points - points) : 0;
   const progressToNext =
-    tier.nextMin != null && tier.nextMin > tier.min
-      ? Math.min(100, (Math.max(0, points - tier.min) / (tier.nextMin - tier.min)) * 100)
+    nextTier && currentTier && nextTier.min_points > currentTier.min_points
+      ? Math.min(100, (Math.max(0, points - currentTier.min_points) / (nextTier.min_points - currentTier.min_points)) * 100)
       : 100;
 
   return (
@@ -78,61 +52,59 @@ export default function LevelInfoModal({ open, onClose, level, points }: LevelIn
         {/* Header */}
         <div className="sticky top-0 z-10 border-b border-[rgba(15,23,42,0.1)] bg-[#F6EFE6] px-6 py-4">
           <h2 id="level-info-title" className="text-xl font-semibold text-[#0F172A]">
-            ☕ Tu nivel: {tier.name}
+            <><AppMark iconOnly iconSize={18} /> Tu nivel: {displayName}</>
           </h2>
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Descripción */}
+          {/* Descripción (badge_message del tier) */}
           <section>
-            <p className="text-sm text-slate-700">{tier.tagline}</p>
-          </section>
-
-          {/* Beneficios */}
-          <section>
-            <h3 className="text-sm font-semibold text-[#0F172A] mb-2">Beneficios de este nivel</h3>
-            <ul className="list-disc list-inside space-y-1.5 text-sm text-slate-700">
-              {benefits.map((b, i) => (
-                <li key={i}>{b}</li>
-              ))}
-            </ul>
+            <p className="text-sm text-slate-700">{description}</p>
           </section>
 
           {/* Progreso al siguiente nivel */}
-          {next.nextName && next.remaining > 0 && (
+          {nextTier && remaining > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-[#0F172A] mb-2">Progreso hacia {next.nextName}</h3>
+              <h3 className="text-sm font-semibold text-[#0F172A] mb-2">Progreso hacia {nextTier.name}</h3>
               <div className="h-3 w-full overflow-hidden rounded-full bg-[#E2E8F0]">
                 <div
                   className="h-full rounded-full bg-[#16A34A] transition-all duration-300"
                   style={{ width: `${progressToNext}%` }}
                 />
               </div>
-              <p className="mt-1 text-xs text-slate-600">
-                Te faltan <strong>{next.remaining}</strong> cafecitos · {Math.round(progressToNext)}%
+              <p className="mt-1 text-sm text-slate-600">
+                Te faltan <strong>{remaining}</strong> cafecitos · {Math.round(progressToNext)}%
               </p>
             </section>
           )}
 
-          {/* Roadmap de niveles */}
+          {/* Roadmap de niveles (reales del sistema, orden por sort_order) */}
           <section>
             <h3 className="text-sm font-semibold text-[#0F172A] mb-3">Niveles del sistema</h3>
             <div className="space-y-2">
-              {MEMBERSHIP_TIERS.map((t) => {
-                const isActive = t.key === tier.key;
+              {tiers.map((t) => {
+                const isActive = t.slug === tierSlug;
                 return (
                   <div
-                    key={t.key}
+                    key={t.id}
                     className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
                       isActive
                         ? "border-red-600/50 bg-white/80 font-medium text-[#0F172A]"
                         : "border-[rgba(15,23,42,0.1)] bg-white/40 text-slate-700"
                     }`}
                   >
-                    <span className="text-base" aria-hidden>{t.emoji}</span>
-                    <span>{t.name}</span>
+                    <span className="text-base shrink-0" aria-hidden>•</span>
+                    <div className="flex items-baseline gap-2 min-w-0 flex-1">
+                      <span className="font-medium">{t.name}</span>
+                      {t.badge_message ? (
+                        <span className="text-slate-500">({t.badge_message})</span>
+                      ) : null}
+                      <span className="text-slate-400 text-sm">
+                        (desde {t.min_points} cafecitos)
+                      </span>
+                    </div>
                     {isActive && (
-                      <span className="ml-auto text-xs font-semibold text-red-600">(activo)</span>
+                      <span className="ml-auto text-sm font-semibold text-red-600 shrink-0">(activo)</span>
                     )}
                   </div>
                 );

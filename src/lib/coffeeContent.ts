@@ -30,7 +30,7 @@ function mapLegacyBlock(block: { type?: string; text?: string; content?: string;
         type: "section",
         title: typeof block.text === "string" ? block.text : "",
         variant: "neutral",
-        icon: "☕",
+        icon: "logo",
       };
     case "p":
       return { type: "p", text: typeof block.text === "string" ? block.text : "" };

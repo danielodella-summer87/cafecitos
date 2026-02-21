@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { CafeKpiRow, DailyKpiRow, TopCustomerRow } from "@/app/actions/adminReports";
+import { AppMark } from "@/components/brand/AppMark";
 
 export default function ReportesAdminClient({
   kpis,
@@ -42,8 +43,9 @@ export default function ReportesAdminClient({
 
       {/* TABLA: Rendimiento por Cafetería */}
       <div className="bg-white rounded-xl shadow overflow-hidden">
-        <div className="p-4 border-b font-semibold">
-          ☕ Rendimiento por Cafetería (30 días)
+        <div className="flex items-center gap-2 p-4 border-b font-semibold">
+          <AppMark iconOnly iconSize={18} />
+          Rendimiento por Cafetería (30 días)
         </div>
         <table className="w-full text-sm">
           <thead className="bg-gray-50">

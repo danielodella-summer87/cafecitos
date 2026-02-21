@@ -21,6 +21,7 @@ import {
   type OwnerTxRow,
 } from "@/app/actions/ownerTransactions";
 import { ownerGetConsumerSummary } from "@/app/actions/ownerSummary";
+import { AppMark } from "@/components/brand/AppMark";
 import { getTxMeta } from "@/lib/ui/txLabels";
 import { PRO } from "@/lib/ui/pro";
 import OwnerStaffManager from "./OwnerStaffManager";
@@ -63,8 +64,8 @@ type Props = {
 
 function CafecitosLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-      <span role="img" aria-label="cafe">☕</span>
+    <span className="inline-flex items-center gap-1.5">
+      <AppMark iconOnly iconSize={32} />
       {children}
     </span>
   );
@@ -892,7 +893,10 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
                 onClick={() => setOpenLast((v) => !v)}
                 className="w-full flex items-center justify-between px-4 py-3 font-medium hover:bg-gray-50"
               >
-                <span>☕ Últimos movimientos</span>
+                <span className="inline-flex items-center gap-2">
+                  <AppMark iconOnly iconSize={18} />
+                  Últimos movimientos
+                </span>
                 <span className="text-sm opacity-60">{openLast ? "−" : "+"}</span>
               </button>
 
@@ -910,8 +914,9 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
                             className="flex justify-between text-sm border-b pb-2"
                           >
                             <div>
-                              <div className="font-medium">
-                                {meta.icon} {meta.label}
+                              <div className="flex items-center gap-1.5 font-medium">
+                                {meta.icon === "logo" ? <AppMark iconOnly iconSize={28} /> : meta.icon}{" "}
+                                {meta.label}
                               </div>
                               <div className="opacity-60">
                                 {t.note ?? ""}
@@ -958,7 +963,10 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
             onClick={() => setOpenAdd((v) => !v)}
             className="w-full flex items-center justify-between text-left font-semibold text-lg"
           >
-            <span>☕ Sumar cafecitos</span>
+            <span className="inline-flex items-center gap-2">
+              <AppMark iconOnly iconSize={18} />
+              Sumar cafecitos
+            </span>
             <span>{openAdd ? "▾" : "▸"}</span>
           </button>
           {openAdd && (
@@ -1028,7 +1036,10 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
               onClick={() => setOpenRedeem((v) => !v)}
               className="w-full flex items-center justify-between text-left font-semibold text-lg"
             >
-              <span>☕ Canjear cafecitos</span>
+              <span className="inline-flex items-center gap-2">
+              <AppMark iconOnly iconSize={18} />
+              Canjear cafecitos
+            </span>
               <span>{openRedeem ? "▾" : "▸"}</span>
             </button>
             {openRedeem && (

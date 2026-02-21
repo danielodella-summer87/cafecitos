@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth/session";
 import { redirect, notFound } from "next/navigation";
 import { getAdminProfileById } from "@/app/actions/adminReports";
+import { AppMark } from "@/components/brand/AppMark";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -30,7 +31,10 @@ export default async function AdminCafeteriasDetailPage({ params }: Props) {
       </div>
 
       <div className="bg-white rounded-xl shadow p-6">
-        <h1 className="text-2xl font-semibold mb-4">☕ Ficha cafetería / owner</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold mb-4">
+        <AppMark iconOnly iconSize={24} />
+        Ficha cafetería / owner
+      </h1>
         <p className="text-sm text-gray-500 mb-4">Socio owner: {displayName}</p>
         <dl className="grid gap-3 text-sm">
           <div>
