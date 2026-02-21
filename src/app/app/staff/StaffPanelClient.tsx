@@ -196,7 +196,7 @@ export default function StaffPanelClient({ canIssue, canRedeem, isInactive = fal
             className={PRO.input}
             value={cedula}
             onChange={(e) => setCedula(e.target.value)}
-            placeholder="Ej: 40031685"
+            placeholder="Ej: 12345678"
             inputMode="numeric"
           />
           <button
