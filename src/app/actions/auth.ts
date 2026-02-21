@@ -107,32 +107,51 @@ export async function loginUser(input: FormData | { cedula: string; pin: string 
   return { ok: true, redirectTo };
 }
 
-export async function registerUser(input: FormData | { cedula: string; pin: string; phone?: string; full_name?: string }) {
-  const registerSchema = z.object({
-    cedula: z.string().min(6),
-    pin: z.string().min(4).max(4),
-    phone: z.string().optional(),
-    full_name: z.string().optional(),
-  });
+export async function registerUser(
+  input: FormData | { cedula: string; pin: string; confirm_pin?: string; phone: string; full_name?: string }
+) {
+  const registerSchema = z
+    .object({
+      cedula: z.string().min(6),
+      pin: z.string().min(4).max(4),
+      confirm_pin: z.string().min(4).max(4),
+      phone: z.string().min(1, "El teléfono es obligatorio"),
+      full_name: z.string().optional(),
+    })
+    .refine((d) => d.pin === d.confirm_pin, { message: "Los PIN no coinciden", path: ["confirm_pin"] });
 
   function normalizeCedula(v: unknown) {
     return String(v ?? "").trim().replace(/\D/g, "");
   }
 
-  function normalizeInput(i: unknown): { cedula: string; pin: string; phone: string; full_name: string } {
+  function normalizeInput(i: unknown): {
+    cedula: string;
+    pin: string;
+    confirm_pin: string;
+    phone: string;
+    full_name: string;
+  } {
     if (typeof FormData !== "undefined" && i instanceof FormData) {
       return {
         cedula: normalizeCedula(i.get("cedula")),
         pin: String(i.get("pin") ?? "").trim(),
+        confirm_pin: String(i.get("confirm_pin") ?? "").trim(),
         phone: String(i.get("phone") ?? "").trim(),
         full_name: String(i.get("full_name") ?? "").trim(),
       };
     }
     if (i && typeof i === "object" && "cedula" in i) {
-      const o = i as { cedula?: unknown; pin?: unknown; phone?: unknown; full_name?: unknown };
+      const o = i as {
+        cedula?: unknown;
+        pin?: unknown;
+        confirm_pin?: unknown;
+        phone?: unknown;
+        full_name?: unknown;
+      };
       return {
         cedula: normalizeCedula(o.cedula),
         pin: String(o.pin ?? "").trim(),
+        confirm_pin: String(o.confirm_pin ?? "").trim(),
         phone: String(o.phone ?? "").trim(),
         full_name: String(o.full_name ?? "").trim(),
       };
@@ -141,10 +160,13 @@ export async function registerUser(input: FormData | { cedula: string; pin: stri
   }
 
   const parsed = registerSchema.safeParse(normalizeInput(input));
-  if (!parsed.success) return { ok: false, error: "Datos inválidos" };
+  if (!parsed.success) {
+    const msg = parsed.error.flatten().formErrors?.[0] ?? parsed.error.message ?? "Datos inválidos";
+    return { ok: false, error: typeof msg === "string" ? msg : "Datos inválidos" };
+  }
 
   const safeName = (parsed.data.full_name ?? "").slice(0, 20);
-  const phone = (parsed.data.phone ?? "").trim();
+  const phone = parsed.data.phone.trim();
   const supabase = supabaseAdmin();
 
   const { data: existing } = await supabase.from("profiles").select("id").eq("cedula", parsed.data.cedula).maybeSingle();
@@ -159,7 +181,7 @@ export async function registerUser(input: FormData | { cedula: string; pin: stri
       cedula: parsed.data.cedula,
       pin_hash,
       full_name: safeName || "Cliente",
-      phone: phone || null,
+      phone,
       is_active: true,
     })
     .select("id")
@@ -197,6 +219,30 @@ export async function registerUser(input: FormData | { cedula: string; pin: stri
   await setSessionCookie(token);
 
   return { ok: true };
+}
+
+/** Código DDMM (fecha de registro en America/Montevideo) para mostrar en bienvenida. Solo consumer. */
+export async function getWelcomeCode(): Promise<{ code: string } | null> {
+  const { getSession } = await import("@/lib/auth/session");
+  const session = await getSession();
+  if (!session || session.role !== "consumer" || !session.profileId) return null;
+  const supabase = supabaseAdmin();
+  const { data: row } = await supabase
+    .from("profiles")
+    .select("created_at")
+    .eq("id", session.profileId)
+    .single();
+  if (!row?.created_at) return null;
+  const d = new Date(row.created_at);
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Montevideo",
+    day: "2-digit",
+    month: "2-digit",
+  });
+  const parts = formatter.formatToParts(d);
+  const day = parts.find((p) => p.type === "day")?.value ?? "";
+  const month = parts.find((p) => p.type === "month")?.value ?? "";
+  return { code: day + month };
 }
 
 export async function createOwner(input: FormData | { cedula: string; pin: string; full_name: string; cafe_name: string; phone?: string }) {

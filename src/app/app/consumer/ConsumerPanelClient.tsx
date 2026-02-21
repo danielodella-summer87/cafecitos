@@ -3,8 +3,11 @@
 import { useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
+import { Gift, ChevronDown } from "lucide-react";
 import { logout } from "@/app/actions/logout";
 import type { ConsumerSummaryResult, ConsumerTx, CafeMapItem } from "@/app/actions/consumerSummary";
+import { redeemWelcomeGift } from "@/app/actions/consumerSummary";
 import type { CafeListItem } from "@/app/actions/cafes";
 import type { CoffeeGuide } from "@/app/actions/coffeeGuides";
 import { getTxMeta } from "@/lib/ui/txLabels";
@@ -52,8 +55,13 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
   const [openLevelInfo, setOpenLevelInfo] = useState(false);
   const [isCafesOpen, setCafesOpen] = useState(false);
 
-  const { session, balance, last10, generatedTotal, redeemedTotal, cafesMap } = data;
+  const { session, balance, last10, generatedTotal, redeemedTotal, cafesMap, welcomeGiftRedeemed } = data;
   const missing = Math.max(0, BENEFIT_TARGET - balance);
+
+  const [welcomeCode, setWelcomeCode] = useState("");
+  const [welcomeLoading, setWelcomeLoading] = useState(false);
+  const [welcomeError, setWelcomeError] = useState<string | null>(null);
+  const [justRedeemed, setJustRedeemed] = useState(false);
   const progressPct = Math.min(100, (balance / BENEFIT_TARGET) * 100);
   const tier = getMembershipTier(balance);
   const next = getNextTierInfo(balance);
@@ -111,6 +119,84 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
           rightSlot={rightSlot}
         />
         <p className="text-sm md:text-base text-slate-600 mt-1 mb-4">{greeting}</p>
+
+        {justRedeemed && (
+          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
+            <p className="font-medium text-green-800">¡Regalo activado! Sumamos 10 cafecitos a tu cuenta.</p>
+            <p className="mt-2 text-sm text-green-700">Explorá promociones y cafeterías:</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => document.getElementById("seccion-promociones")?.scrollIntoView({ behavior: "smooth" })}
+                className="rounded-xl bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700"
+              >
+                Ver promociones
+              </button>
+              <button
+                type="button"
+                onClick={() => document.getElementById("seccion-explorar")?.scrollIntoView({ behavior: "smooth" })}
+                className="rounded-xl bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700"
+              >
+                Explorar cafeterías
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!welcomeGiftRedeemed && !justRedeemed && (
+          <Card className="mb-6 !bg-[#F6EFE6]">
+            <CardTitle>Activar regalo de bienvenida</CardTitle>
+            <CardSubtitle>Código recibido por WhatsApp (4 dígitos)</CardSubtitle>
+            <Image
+              src="/images/amor-perfecto-bolsa-250g.png"
+              alt="Bolsa de café Amor Perfecto 250g"
+              width={520}
+              height={520}
+              className="mt-3 w-full max-w-[240px] mx-auto rounded-xl shadow-sm"
+              priority
+            />
+            <form
+              className="mt-4 flex flex-wrap items-end gap-3"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setWelcomeError(null);
+                setWelcomeLoading(true);
+                const res = await redeemWelcomeGift(welcomeCode);
+                setWelcomeLoading(false);
+                if (res.ok) {
+                  setJustRedeemed(true);
+                  setWelcomeCode("");
+                  router.refresh();
+                } else {
+                  setWelcomeError(res.message);
+                }
+              }}
+            >
+              <div className="flex-1 min-w-[120px]">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="0000"
+                  value={welcomeCode}
+                  onChange={(e) => setWelcomeCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 outline-none focus:ring-2 focus:ring-red-500/40"
+                  aria-label="Código recibido por WhatsApp (4 dígitos)"
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="danger"
+                disabled={welcomeLoading || welcomeCode.length !== 4}
+                className="inline-flex items-center justify-center gap-2"
+              >
+                <Gift className="h-4 w-4 text-white" />
+                {welcomeLoading ? "Activando…" : "Activar"}
+              </Button>
+            </form>
+            {welcomeError && <p className="mt-2 text-sm text-red-600">{welcomeError}</p>}
+          </Card>
+        )}
 
         {/* Primera fila: 25% izquierda (Saldo, Nivel, Próximo beneficio, Generado) + 75% derecha (carrusel promos) */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
@@ -176,7 +262,7 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
           </div>
 
           {/* DERECHA (75%) - Carrusel promos */}
-          <div className="md:col-span-9">
+          <div id="seccion-promociones" className="md:col-span-9 scroll-mt-4">
             <Card className="!bg-[#F6EFE6]">
               <div className="flex items-center justify-between">
                 <div>
@@ -229,26 +315,45 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
         </div>
 
         {/* Cafeterías cerca / Explorar — colapsado por defecto */}
-        <div className="mt-6">
+        <div id="seccion-explorar" className="mt-6 scroll-mt-4">
           <button
             type="button"
             onClick={() => setCafesOpen((o) => !o)}
-            className="flex w-full items-center gap-3 rounded-xl border border-[rgba(15,23,42,0.10)] bg-[#F6EFE6] p-4 text-left transition hover:bg-[#EDE6DC] focus:outline-none focus:ring-2 focus:ring-red-500/40"
+            className="group flex w-full items-start justify-between gap-4 rounded-xl border border-[rgba(15,23,42,0.10)] bg-[#F6EFE6] p-4 text-left transition hover:bg-[#EDE6DC] focus:outline-none focus:ring-2 focus:ring-red-500/40"
             aria-expanded={isCafesOpen}
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#C0841A]/15 text-[#B45309]" aria-hidden>
-              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
-              </svg>
-            </span>
-            <span className="flex-1 text-lg font-semibold text-[#0F172A]">Explorar cafeterías</span>
-            <span className="shrink-0 text-[#64748B]" aria-hidden>
-              {isCafesOpen ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-              )}
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-baseline gap-2">
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">Explorar cafeterías</span>
+              </div>
+              <div className="mt-2">
+                <div className="relative h-[72px] w-full overflow-hidden rounded-xl transition-all duration-300 ease-out">
+                  <img
+                    src="/images/banners/cafeterias-wide.png"
+                    alt="Explorar cafeterías"
+                    className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04] contrast-[1.03] brightness-[1.02]"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "/images/banners/default-wide.png";
+                    }}
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-0 rounded-xl backdrop-blur-[1.5px] backdrop-saturate-[1.15] opacity-60"
+                    aria-hidden
+                  />
+                  <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-black/10" aria-hidden />
+                  <div className="pointer-events-none absolute inset-0" aria-hidden>
+                    <div className="absolute -top-6 left-0 right-0 h-16 bg-gradient-to-b from-white/40 via-white/15 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent opacity-60" />
+                  </div>
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/35 via-black/15 to-transparent" aria-hidden />
+                </div>
+              </div>
+            </div>
+            <span
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white shadow-md ring-1 ring-black/5 ring-2 ring-white/70 transition-all duration-200 hover:scale-[1.04] hover:bg-red-700 active:scale-[0.96] active:bg-red-800"
+              aria-hidden
+            >
+              <ChevronDown className={`h-5 w-5 text-white transition-transform duration-300 ${isCafesOpen ? "rotate-180" : ""}`} />
             </span>
           </button>
           {isCafesOpen && (
@@ -295,16 +400,41 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
         <div className="mt-6">
           <Card className="!bg-[#F6EFE6] p-0 overflow-hidden">
             <details className="group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2 rounded-[1rem]">
-                <div>
-                  <h2 className="text-base font-semibold text-[#0F172A]">☕ Universo Café</h2>
-                  <p className="mt-0.5 text-sm text-[#64748B]">Recetas, métodos y preparaciones</p>
+              <summary className="group flex cursor-pointer list-none items-start justify-between gap-4 p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2 rounded-[1rem]">
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">☕ Universo Café</span>
+                    <span className="shrink-0 text-[12px] text-slate-500">•</span>
+                    <span className="min-w-0 flex-1 truncate text-[12px] text-slate-500">Recetas, métodos y preparaciones</span>
+                  </div>
+                  <div className="mt-2">
+                    <div className="relative h-[72px] w-full overflow-hidden rounded-xl transition-all duration-300 ease-out">
+                      <img
+                        src="/images/banners/universo-cafe-wide.png"
+                        alt="Universo Café"
+                        className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04] contrast-[1.03] brightness-[1.02]"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "/images/banners/default-wide.png";
+                        }}
+                      />
+                      <div
+                        className="pointer-events-none absolute inset-0 rounded-xl backdrop-blur-[1.5px] backdrop-saturate-[1.15] opacity-60"
+                        aria-hidden
+                      />
+                      <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-black/10" aria-hidden />
+                      <div className="pointer-events-none absolute inset-0" aria-hidden>
+                        <div className="absolute -top-6 left-0 right-0 h-16 bg-gradient-to-b from-white/40 via-white/15 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent opacity-60" />
+                      </div>
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/35 via-black/15 to-transparent" aria-hidden />
+                    </div>
+                  </div>
                 </div>
-                <span className="flex shrink-0 items-center gap-2 text-[#64748B]">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#C0841A]/15" aria-hidden>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1" /><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4Z" /><line x1="6" x2="6" y1="2" y2="4" /><line x1="10" x2="10" y1="2" y2="4" /><line x1="14" x2="14" y1="2" y2="4" /></svg>
-                  </span>
-                  <svg className="w-5 h-5 text-[#64748B] transition-transform duration-200 group-open:rotate-180" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white shadow-md ring-1 ring-black/5 ring-2 ring-white/70 transition-all duration-200 hover:scale-[1.04] hover:bg-red-700 active:scale-[0.96] active:bg-red-800"
+                  aria-label="Desplegar"
+                >
+                  <ChevronDown className="h-5 w-5 text-white transition-transform duration-300 group-open:rotate-180" />
                 </span>
               </summary>
               <div className="border-t border-[rgba(15,23,42,0.10)] px-5 pb-5 pt-4">
@@ -335,33 +465,139 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
           </Card>
         </div>
 
-        {/* Eventos */}
+        {/* Eventos — colapsado por defecto */}
         <div className="mt-6">
-          <Card>
-            <CardTitle>Eventos esta semana</CardTitle>
-            <CardSubtitle>Próximamente</CardSubtitle>
-            <p className="mt-2 text-sm text-[#64748B]">Sin eventos programados</p>
+          <Card className="!bg-[#F6EFE6] p-0 overflow-hidden">
+            <details className="group">
+              <summary className="group flex cursor-pointer list-none items-start justify-between gap-4 p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2 rounded-[1rem]">
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">Eventos esta semana</span>
+                    <span className="shrink-0 text-[12px] text-slate-500">•</span>
+                    <span className="min-w-0 flex-1 truncate text-[12px] text-slate-500">Próximamente</span>
+                  </div>
+                  <div className="mt-2">
+                    <div className="relative h-[72px] w-full overflow-hidden rounded-xl transition-all duration-300 ease-out">
+                      <img
+                        src="/images/banners/eventos-wide.png"
+                        alt="Eventos"
+                        className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04] contrast-[1.03] brightness-[1.02]"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "/images/banners/default-wide.png";
+                        }}
+                      />
+                      <div
+                        className="pointer-events-none absolute inset-0 rounded-xl backdrop-blur-[1.5px] backdrop-saturate-[1.15] opacity-60"
+                        aria-hidden
+                      />
+                      <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-black/10" aria-hidden />
+                      <div className="pointer-events-none absolute inset-0" aria-hidden>
+                        <div className="absolute -top-6 left-0 right-0 h-16 bg-gradient-to-b from-white/40 via-white/15 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent opacity-60" />
+                      </div>
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/35 via-black/15 to-transparent" aria-hidden />
+                    </div>
+                  </div>
+                </div>
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white shadow-md ring-1 ring-black/5 ring-2 ring-white/70 transition-all duration-200 hover:scale-[1.04] hover:bg-red-700 active:scale-[0.96] active:bg-red-800"
+                  aria-label="Desplegar"
+                >
+                  <ChevronDown className="h-5 w-5 text-white transition-transform duration-300 group-open:rotate-180" />
+                </span>
+              </summary>
+              <div className="border-t border-[rgba(15,23,42,0.10)] px-5 pb-5 pt-4">
+                <p className="text-sm text-[#64748B]">Sin eventos programados</p>
+              </div>
+            </details>
           </Card>
         </div>
 
-        {/* Canjeado total (Generado está en la columna izquierda) */}
+        {/* Canjeado total — colapsado por defecto */}
         <div className="mt-6">
-          <Card>
-            <CardSubtitle>Canjeado total</CardSubtitle>
-            <p className="mt-1 text-2xl font-semibold text-orange-600">−{redeemedTotal}</p>
+          <Card className="!bg-[#F6EFE6] p-0 overflow-hidden">
+            <details className="group">
+              <summary className="group flex cursor-pointer list-none items-start justify-between gap-4 p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2 rounded-[1rem]">
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">Canjeado total</span>
+                    <span className="shrink-0 text-[12px] text-slate-500">•</span>
+                    <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-orange-600">−{redeemedTotal}</span>
+                  </div>
+                  <div className="mt-2">
+                    <div className="relative h-[72px] w-full overflow-hidden rounded-xl transition-all duration-300 ease-out">
+                      <img
+                        src="/images/banners/canjeado-wide.png"
+                        alt="Canjeado total"
+                        className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04] contrast-[1.03] brightness-[1.02]"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "/images/banners/default-wide.png";
+                        }}
+                      />
+                      <div
+                        className="pointer-events-none absolute inset-0 rounded-xl backdrop-blur-[1.5px] backdrop-saturate-[1.15] opacity-60"
+                        aria-hidden
+                      />
+                      <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-black/10" aria-hidden />
+                      <div className="pointer-events-none absolute inset-0" aria-hidden>
+                        <div className="absolute -top-6 left-0 right-0 h-16 bg-gradient-to-b from-white/40 via-white/15 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent opacity-60" />
+                      </div>
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/35 via-black/15 to-transparent" aria-hidden />
+                    </div>
+                  </div>
+                </div>
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white shadow-md ring-1 ring-black/5 ring-2 ring-white/70 transition-all duration-200 hover:scale-[1.04] hover:bg-red-700 active:scale-[0.96] active:bg-red-800"
+                  aria-label="Desplegar"
+                >
+                  <ChevronDown className="h-5 w-5 text-white transition-transform duration-300 group-open:rotate-180" />
+                </span>
+              </summary>
+              <div className="border-t border-[rgba(15,23,42,0.10)] px-5 pb-5 pt-4">
+                <p className="text-2xl font-semibold text-orange-600">−{redeemedTotal}</p>
+              </div>
+            </details>
           </Card>
         </div>
 
         {/* Últimos movimientos */}
         <Card className="mt-6">
           <details className="group">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span aria-hidden>☕</span>
-                <CardTitle className="!mt-0">Últimos movimientos</CardTitle>
+            <summary className="group flex cursor-pointer list-none items-start justify-between gap-4 p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2 rounded-[1rem]">
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">☕ Últimos movimientos</span>
+                </div>
+                <div className="mt-2">
+                  <div className="relative h-[72px] w-full overflow-hidden rounded-xl transition-all duration-300 ease-out">
+                    <img
+                      src="/images/banners/movimientos-wide.png"
+                      alt="Últimos movimientos"
+                      className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04] contrast-[1.03] brightness-[1.02]"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "/images/banners/default-wide.png";
+                      }}
+                    />
+                    <div
+                      className="pointer-events-none absolute inset-0 rounded-xl backdrop-blur-[1.5px] backdrop-saturate-[1.15] opacity-60"
+                      aria-hidden
+                    />
+                    <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-black/10" aria-hidden />
+                    <div className="pointer-events-none absolute inset-0" aria-hidden>
+                      <div className="absolute -top-6 left-0 right-0 h-16 bg-gradient-to-b from-white/40 via-white/15 to-transparent" />
+                      <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent opacity-60" />
+                    </div>
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/35 via-black/15 to-transparent" aria-hidden />
+                  </div>
+                </div>
               </div>
-              <span className="text-xs text-[#64748B] group-open:hidden">Mostrar</span>
-              <span className="text-xs text-[#64748B] hidden group-open:inline">Ocultar</span>
+              <span
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white shadow-md ring-1 ring-black/5 ring-2 ring-white/70 transition-all duration-200 hover:scale-[1.04] hover:bg-red-700 active:scale-[0.96] active:bg-red-800"
+                aria-label="Desplegar"
+              >
+                <ChevronDown className="h-5 w-5 text-white transition-transform duration-300 group-open:rotate-180" />
+              </span>
             </summary>
             <div className="mt-4 space-y-2 border-t border-[rgba(15,23,42,0.10)] pt-4">
               {last10.length === 0 ? (

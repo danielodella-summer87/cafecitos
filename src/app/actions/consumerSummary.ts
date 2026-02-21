@@ -45,6 +45,7 @@ export type ConsumerSummaryResult = {
   generatedTotal: number;
   redeemedTotal: number;
   cafesMap: Record<string, CafeMapItem>;
+  welcomeGiftRedeemed: boolean;
 };
 
 export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null> {
@@ -66,6 +67,7 @@ export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null
       generatedTotal: 0,
       redeemedTotal: 0,
       cafesMap: {},
+      welcomeGiftRedeemed: false,
     };
   }
 
@@ -120,6 +122,13 @@ export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null
     }
   }
 
+  const { data: welcomeRow } = await supabase
+    .from("welcome_gifts")
+    .select("redeemed_at")
+    .eq("profile_id", safeProfileId)
+    .maybeSingle();
+  const welcomeGiftRedeemed = !!welcomeRow?.redeemed_at;
+
   return {
     session: {
       profileId: safeProfileId,
@@ -132,7 +141,33 @@ export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null
     generatedTotal,
     redeemedTotal,
     cafesMap,
+    welcomeGiftRedeemed,
   };
+}
+
+/** Canjear regalo de bienvenida con código DDMM. Solo consumer; valida sesión y llama RPC. */
+export async function redeemWelcomeGift(code: string): Promise<{ ok: boolean; message: string; credited?: number }> {
+  const session = await getSession();
+  if (!session || session.role !== "consumer" || !session.profileId) {
+    return { ok: false, message: "Sesión inválida" };
+  }
+  const trimmed = String(code ?? "").trim().replace(/\D/g, "");
+  if (trimmed.length !== 4) {
+    return { ok: false, message: "El código debe tener 4 dígitos" };
+  }
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase.rpc("redeem_welcome_gift", {
+    p_profile_id: session.profileId,
+    p_code: trimmed,
+  });
+  if (error) {
+    return { ok: false, message: error.message ?? "Error al activar el regalo" };
+  }
+  const result = data as { ok?: boolean; message?: string; credited?: number } | null;
+  if (result?.ok) {
+    return { ok: true, message: result.message ?? "Regalo activado", credited: result.credited };
+  }
+  return { ok: false, message: result?.message ?? "No se pudo activar el regalo" };
 }
 
 /** Balance de cafecitos para un perfil (p. ej. Universo Café). */
