@@ -302,37 +302,17 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
                 <span className="text-[12px] text-slate-500">Atajos</span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <div>
-                  <button
-                    type="button"
-                    disabled
-                    className="h-10 w-full rounded-xl text-sm font-semibold transition-all bg-red-600/70 text-white opacity-50 cursor-not-allowed"
-                  >
-                    Canjear
-                  </button>
-                  <p className="mt-0.5 text-[11px] text-slate-500">Próximamente</p>
-                </div>
-                <div>
-                  <button
-                    type="button"
-                    disabled
-                    className="h-10 w-full rounded-xl text-sm font-semibold transition-all bg-white/70 text-slate-900 ring-1 ring-black/10 opacity-50 cursor-not-allowed"
-                  >
-                    Sumar
-                  </button>
-                  <p className="mt-0.5 text-[11px] text-slate-500">Próximamente</p>
-                </div>
                 <button
                   type="button"
                   onClick={() => document.getElementById("seccion-movimientos")?.scrollIntoView({ behavior: "smooth" })}
-                  className="h-10 w-full rounded-xl text-sm font-semibold transition-all bg-transparent text-slate-700 ring-1 ring-black/10 hover:bg-white/50"
+                  className="h-10 w-full rounded-xl text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50"
                 >
                   Ver historial
                 </button>
                 <button
                   type="button"
                   onClick={() => document.getElementById("seccion-explorar")?.scrollIntoView({ behavior: "smooth" })}
-                  className="h-10 w-full rounded-xl text-sm font-semibold transition-all bg-transparent text-slate-700 ring-1 ring-black/10 hover:bg-white/50"
+                  className="h-10 w-full rounded-xl text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50"
                 >
                   Explorar
                 </button>
@@ -342,8 +322,8 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
 
           {/* DERECHA (75%) - Carrusel promos */}
           <div id="seccion-promociones" className="md:col-span-9 scroll-mt-4">
-            <Card className="!bg-[#F6EFE6]">
-              <div className="flex items-center justify-between">
+            <Card className="!bg-[#F6EFE6] md:h-[420px] flex flex-col">
+              <div className="flex items-center justify-between shrink-0">
                 <div>
                   <CardTitle>Promociones</CardTitle>
                   <CardSubtitle>Beneficios disponibles en tus cafeterías.</CardSubtitle>
@@ -368,26 +348,28 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
                 </div>
               </div>
 
-              {/* Carrusel promos: scroll-snap responsive */}
-              <div
-                ref={promoScrollRef}
-                className="mt-4 flex items-stretch gap-4 overflow-x-auto pb-2 snap-x snap-mandatory hide-scrollbar"
-              >
-                {promos.map((p) => (
-                  <div
-                    key={p.id}
-                    className="snap-start shrink-0 w-[85vw] sm:w-[48vw] lg:w-[32vw] xl:w-[24vw]"
-                  >
-                    <PromoCard
-                      image={p.image}
-                      title={p.title}
-                      description={p.description}
-                      cafes={p.cafes}
-                      onDiscoverClick={() => onDiscoverPromo(p)}
-                      onOpenCafe={handleOpenCafe}
-                    />
-                  </div>
-                ))}
+              {/* Contenedor scrolleable en desktop para emparejar altura con columna izquierda */}
+              <div className="mt-3 flex-1 min-h-0 overflow-auto pr-1">
+                <div
+                  ref={promoScrollRef}
+                  className="flex items-stretch gap-4 overflow-x-auto pb-2 snap-x snap-mandatory hide-scrollbar"
+                >
+                  {promos.map((p) => (
+                    <div
+                      key={p.id}
+                      className="snap-start shrink-0 w-[85vw] sm:w-[48vw] lg:w-[32vw] xl:w-[24vw]"
+                    >
+                      <PromoCard
+                        image={p.image}
+                        title={p.title}
+                        description={p.description}
+                        cafes={p.cafes}
+                        onDiscoverClick={() => onDiscoverPromo(p)}
+                        onOpenCafe={handleOpenCafe}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </Card>
           </div>
