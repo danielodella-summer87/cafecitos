@@ -29,7 +29,9 @@ export type CafePublicInfo = {
 
 export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo | (CafePublicInfo & { debug?: unknown }) | { cafe: null; reviewsStats: null; reviews: never[]; promos: never[]; debug?: unknown }> {
   const session = await getSession();
-  if (!session) return null;
+  if (!session) {
+    return { cafe: null, reviewsStats: null, reviews: [], promos: [], debug: { reason: "No autenticado" } };
+  }
 
   const supabase = supabaseAdmin();
 
