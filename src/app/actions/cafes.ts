@@ -1,6 +1,7 @@
 "use server";
 
 import { getSession } from "@/lib/auth/session";
+import { geocodeAddress } from "@/lib/server/geocode";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export type CreateCafeInput = {
@@ -121,6 +122,23 @@ export async function createCafe(
     if (staffErr2) throw new Error(`createCafe insert cafe_staff (fallback): ${(staffErr2 as any)?.message ?? ""}`);
   }
 
+  const addressText = `${(input.city ?? "").trim()} ${(input.address ?? "").trim()}`.trim();
+  if (addressText) {
+    const coords = await geocodeAddress(addressText);
+    if (coords) {
+      await sb
+        .from("cafes")
+        .update({
+          lat: coords.lat,
+          lng: coords.lng,
+          geocoded_at: new Date().toISOString(),
+          geocode_source: "nominatim",
+          geocode_query: addressText,
+        })
+        .eq("id", cafe.id);
+    }
+  }
+
   return cafe as { id: string; name: string; image_code: string };
 }
 
@@ -222,6 +240,32 @@ export async function updateCafe(input: UpdateCafeInput) {
     const fallback = staffRows.map(({ can_issue, can_redeem, ...rest }) => rest);
     const { error: e2 } = await sb.from("cafe_staff").insert(fallback);
     if (e2) throw new Error(`updateCafe staff: ${(e2 as Error).message}`);
+  }
+
+  const addressTextNew = `${(input.city ?? "").trim()} ${(input.address ?? "").trim()}`.trim();
+  if (addressTextNew) {
+    const { data: current } = await sb
+      .from("cafes")
+      .select("lat, lng, geocode_query")
+      .eq("id", id)
+      .single();
+    const hasCoords = current?.lat != null && current?.lng != null;
+    const queryUnchanged = (current?.geocode_query ?? "") === addressTextNew;
+    if (!hasCoords || !queryUnchanged) {
+      const coords = await geocodeAddress(addressTextNew);
+      if (coords) {
+        await sb
+          .from("cafes")
+          .update({
+            lat: coords.lat,
+            lng: coords.lng,
+            geocoded_at: new Date().toISOString(),
+            geocode_source: "nominatim",
+            geocode_query: addressTextNew,
+          })
+          .eq("id", id);
+      }
+    }
   }
 
   return cafe as { id: string; name: string; image_code: string; is_active: boolean };

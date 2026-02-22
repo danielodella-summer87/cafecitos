@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { getCafePublicInfo, upsertCafeReview, type CafePublicInfo } from "@/app/actions/cafeInfo";
+import { getCafePublicInfo, type CafePublicInfo } from "@/app/actions/cafeInfo";
 import { Button } from "@/app/ui/components";
 import CafeName from "@/app/ui/CafeName";
 
@@ -13,8 +13,31 @@ type CafeInfoModalProps = {
   open: boolean;
   cafeId: string;
   onClose: () => void;
-  /** Si true (usuario admin), ve reseñas pero no puede calificar ni guardar. */
   isAdmin?: boolean;
+  /** Nombre para el header cuando la data aún no cargó (ej. desde lista). */
+  cafeName?: string;
+};
+
+/** Campos opcionales para UI (pueden no existir en backend aún). */
+type CafeDetailUI = CafePublicInfo["cafe"] & {
+  phone?: string | null;
+  whatsapp?: string | null;
+  history?: string | null;
+  gallery_url?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+};
+
+const TAB_IDS = ["info", "promos", "resenas", "historia", "carta", "galeria", "servicios", "pagos"] as const;
+const TAB_LABELS: Record<(typeof TAB_IDS)[number], string> = {
+  info: "Info",
+  promos: "Promos",
+  resenas: "Reseñas",
+  historia: "Historia",
+  carta: "Carta de cafés",
+  galeria: "Galería",
+  servicios: "Servicios",
+  pagos: "Pagos",
 };
 
 function formatReviewDate(iso: string): string {
@@ -26,24 +49,114 @@ function formatReviewDate(iso: string): string {
   }
 }
 
-export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false }: CafeInfoModalProps) {
+/** Normaliza teléfono: quita espacios, guiones, paréntesis. Para wa.me sin '+'. */
+function normalizePhone(input: string): string {
+  const cleaned = input.replace(/[\s\-()]/g, "").replace(/^\+/, "");
+  return cleaned.replace(/\D/g, "").trim();
+}
+
+/** E164 sin + para wa.me. */
+function toE164(phone: string): string {
+  const digits = normalizePhone(phone);
+  if (digits.length >= 9) return digits.startsWith("598") ? digits : `598${digits.slice(-8)}`;
+  return digits || "598";
+}
+
+/** Para tel: href, con + si es internacional. */
+function toTelHref(phone: string): string {
+  const digits = normalizePhone(phone);
+  const e164 = toE164(phone);
+  return `tel:+${e164}`;
+}
+
+export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false, cafeName: propsCafeName }: CafeInfoModalProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<CafePublicInfo | null>(null);
-
+  const [activeTab, setActiveTab] = useState<(typeof TAB_IDS)[number]>("info");
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
-  const [savingReview, setSavingReview] = useState(false);
   const [cafeImgSrc, setCafeImgSrc] = useState(FALLBACK_COVER);
 
+  const raw = data as Record<string, unknown> | null;
+  const cafeRaw = (raw?.cafe ?? (raw as any)?.data?.cafe ?? (raw as any)?.cafe_public ?? raw) as Record<string, unknown> | null | undefined;
+  const cafe = cafeRaw as CafeDetailUI | null | undefined;
+
+  if (typeof process !== "undefined" && process.env.NODE_ENV === "development") {
+    console.log("[CafeInfoModal] cafeId", cafeId, "data", data, "cafeRaw", cafeRaw);
+  }
+
+  const city = String(
+    cafeRaw?.city ??
+    cafeRaw?.ciudad ??
+    cafeRaw?.location_city ??
+    (cafeRaw?.location as Record<string, unknown>)?.city ??
+    cafeRaw?.address_city ??
+    ""
+  ).trim();
+  const address = String(
+    cafeRaw?.address ??
+    cafeRaw?.direccion ??
+    cafeRaw?.street ??
+    cafeRaw?.location_address ??
+    (cafeRaw?.location as Record<string, unknown>)?.address ??
+    cafeRaw?.address_line ??
+    cafeRaw?.street_line ??
+    ""
+  ).trim();
+  const hours = String(
+    cafeRaw?.hours_text ??
+    cafeRaw?.hours ??
+    cafeRaw?.horario ??
+    cafeRaw?.schedule ??
+    cafeRaw?.opening_hours ??
+    ""
+  ).trim();
+  const addressLine = city || address ? `${city}${city && address ? " · " : ""}${address}` : "—";
+  const hoursLine = hours ? hours : "A confirmar";
+  const displayTitle = propsCafeName ?? (cafe?.name ?? (cafeRaw as any)?.title ?? "Cafetería");
+  const addressText = [city, address].filter(Boolean).join(", ");
+  const query = [city, address].filter(Boolean).join(" ");
+  const hasQuery = query.trim().length > 0;
+  const hasLatLng = cafe?.lat != null && cafe?.lng != null;
+  const mapHref =
+    hasLatLng && cafe
+      ? `https://www.google.com/maps?q=${cafe.lat},${cafe.lng}`
+      : hasQuery
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
+        : null;
+  const staticMapSrc =
+    hasLatLng && cafe
+      ? `https://staticmap.openstreetmap.de/staticmap.php?center=${cafe.lat},${cafe.lng}&zoom=16&size=640x220&maptype=mapnik&markers=${cafe.lat},${cafe.lng},red-pushpin`
+      : hasQuery
+        ? "/images/map-preview-wide.svg"
+        : null;
+
+  const phone = cafe?.phone?.trim() || null;
+  const whatsapp = cafe?.whatsapp?.trim() || cafe?.phone?.trim() || null;
+  const waMsg = "Hola! Vi tu cafetería en Cafecitos y quería consultar…";
+  const waHref = whatsapp ? `https://wa.me/${toE164(whatsapp)}?text=${encodeURIComponent(waMsg)}` : "#";
+  const telHref = phone ? toTelHref(phone) : "#";
+  const hasContact = Boolean(phone || whatsapp);
+  const promosCount = (data?.promos ?? (raw as any)?.promos)?.length ?? 0;
+  const showDebug = false;
+
   useEffect(() => {
-    if (!open || !cafeId) {
+    console.log("[CafeInfoModal] cafeId recibido:", cafeId);
+    if (!open) {
       setData(null);
       setError(null);
       setRating(0);
       setComment("");
+      setActiveTab("info");
       setCafeImgSrc(FALLBACK_COVER);
+      return;
+    }
+    if (!cafeId || cafeId.trim() === "") {
+      setData(null);
+      setError(null);
+      setLoading(false);
       return;
     }
     setLoading(true);
@@ -52,9 +165,12 @@ export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false }
     getCafePublicInfo(cafeId)
       .then((res) => {
         setData(res);
-        if (res?.cafe?.image_code != null) {
-          const code2 = String(res.cafe.image_code).padStart(2, "0");
+        const c = (res as any)?.cafe ?? (res as any)?.data?.cafe ?? res;
+        if (c?.image_code != null) {
+          const code2 = String(c.image_code).padStart(2, "0");
           setCafeImgSrc(`/media/cafes/${code2}.jpg`);
+        } else if (c?.image_url ?? (c as any)?.hero_url) {
+          setCafeImgSrc((c as any).image_url ?? (c as any).hero_url);
         }
       })
       .catch(() => setError("No se pudo cargar la información"))
@@ -69,24 +185,6 @@ export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false }
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  async function handleSaveReview() {
-    if (!cafeId || rating < 1 || rating > 5) return;
-    setSavingReview(true);
-    const result = await upsertCafeReview({ cafe_id: cafeId, rating, comment });
-    setSavingReview(false);
-    if (result.ok && data) {
-      const fresh = await getCafePublicInfo(cafeId);
-      if (fresh) setData(fresh);
-    }
-  }
-
-  const titleText = data ? null : "Cargando…";
-
-  const address = (data?.cafe?.address ?? "").trim();
-  const city = (data?.cafe?.city ?? "").trim();
-  const mapQuery = encodeURIComponent(`${address} ${city}`.trim());
-  const mapHref = `https://www.google.com/maps/search/?api=1&query=${mapQuery}`;
-
   if (!open) return null;
 
   return (
@@ -95,177 +193,419 @@ export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false }
       onClick={onClose}
       role="dialog"
       aria-modal="true"
+      aria-labelledby="cafe-modal-title"
     >
       <div
-        className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl bg-[#F6EFE6] shadow-xl animate-[fadeIn_.2s_ease-out]"
+        className="flex w-full max-w-2xl max-h-[90vh] flex-col rounded-2xl bg-[#F6EFE6] shadow-xl animate-[fadeIn_.2s_ease-out] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header sticky premium */}
-        <div className="sticky top-0 z-10 border-b border-[rgba(15,23,42,0.1)] bg-[#F6EFE6] px-6 py-4">
-          {data?.cafe ? (
+        {/* Header fijo: nombre + cerrar */}
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[rgba(15,23,42,0.1)] bg-[#F6EFE6] px-4 py-3">
+          {cafe?.id ? (
             <button
               type="button"
               onClick={() => {
-                router.push(`/app/cafes/${data.cafe.id}`);
+                router.push(`/app/cafes/${cafe.id}`);
                 onClose();
               }}
-              className="text-xl font-semibold text-[#0F172A] transition hover:opacity-70 cursor-pointer text-left w-full"
+              id="cafe-modal-title"
+              className="min-w-0 flex-1 text-left text-lg font-semibold text-[#0F172A] hover:opacity-80 transition-opacity"
             >
-              <CafeName cafe={data.cafe} />
+              <CafeName cafe={cafe as CafePublicInfo["cafe"]} />
             </button>
           ) : (
-            <span className="text-xl font-semibold text-[#0F172A]">{titleText ?? "Cargando…"}</span>
+            <span id="cafe-modal-title" className="text-lg font-semibold text-[#0F172A]">
+              {loading ? "Cargando…" : displayTitle}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-xl p-2 text-slate-600 hover:bg-black/5 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+            aria-label="Cerrar"
+          >
+            <span className="text-xl leading-none" aria-hidden>×</span>
+          </button>
+        </div>
+
+        {/* Hero imagen */}
+        <div className="relative h-44 w-full shrink-0 overflow-hidden bg-slate-200">
+          <Image
+            src={cafeImgSrc}
+            alt={cafe?.name ? `Foto de ${cafe.name}` : "Foto de cafetería"}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, 672px"
+            onError={() => setCafeImgSrc(FALLBACK_COVER)}
+            priority
+          />
+        </div>
+
+        {/* Tabs: siempre visibles cuando el modal está abierto */}
+        <div
+          className="sticky top-0 z-10 shrink-0 border-b border-[rgba(15,23,42,0.1)] bg-[#F6EFE6]"
+          role="tablist"
+          aria-label="Secciones de la cafetería"
+        >
+          <div className="flex gap-1 overflow-x-auto px-3 py-2 hide-scrollbar">
+            {TAB_IDS.map((id) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === id}
+                aria-controls={`panel-${id}`}
+                id={`tab-${id}`}
+                onClick={() => setActiveTab(id)}
+                className={`shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-1 inline-flex items-center gap-1.5 ${
+                  activeTab === id
+                    ? "bg-red-600 text-white shadow-sm ring-1 ring-red-700/20"
+                    : "bg-white/60 text-slate-700 hover:bg-white/80"
+                }`}
+              >
+                {TAB_LABELS[id]}
+                {id === "promos" && promosCount > 0 && (
+                  <span className="rounded-full bg-red-600 text-white text-[10px] font-semibold min-w-[18px] h-[18px] flex items-center justify-center px-2">
+                    {promosCount > 99 ? "99+" : promosCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Panel con scroll: loading / error / contenido por tab */}
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {process.env.NODE_ENV === "development" && showDebug && (
+            <div
+              style={{
+                background: "#fff3cd",
+                border: "1px solid #ffe69c",
+                borderRadius: 8,
+                padding: 8,
+                fontSize: 11,
+                marginBottom: 8,
+                overflow: "auto",
+                maxHeight: 70,
+                lineHeight: 1.3,
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              DEBUG CAFE MODAL
+              {"\n"}
+              open: {String(open)}
+              {"\n"}
+              cafeId: {String(cafeId)} (type: {typeof cafeId}, len: {String(cafeId ?? "").length})
+              {"\n"}
+              loading: {String(loading)}
+              {"\n"}
+              error: {String((error as any)?.message ?? error ?? "")}
+              {"\n\n"}
+              data.cafe:
+              {"\n"}
+              {JSON.stringify((data as any)?.cafe ?? null, null, 2)}
+              {"\n\n"}
+              data.debug (action):
+              {"\n"}
+              {JSON.stringify((data as any)?.debug ?? null, null, 2)}
+            </div>
+          )}
+          {loading && (
+            <div className="text-center text-slate-500 py-10">
+              Cargando…
+            </div>
+          )}
+
+          {!loading && error && (
+            <div className="text-center text-red-500 py-10">
+              Error al cargar información.
+            </div>
+          )}
+
+          {!loading && !error && !cafeId?.trim() && (
+            <div className="text-center text-slate-500 py-10">
+              Sin ID de cafetería.
+            </div>
+          )}
+
+          {!loading && !error && cafeId?.trim() && data && !(data as any)?.cafe && (
+            <div className="text-center text-slate-600 py-10">
+              No se pudieron cargar datos de la cafetería.
+            </div>
+          )}
+
+          {!loading && !error && !data && (
+            <div className="text-center text-slate-600 py-10">
+              No se pudieron cargar datos de la cafetería.
+            </div>
+          )}
+
+          {!loading && !error && data && (data as any)?.cafe && (
+            <>
+                {/* Panel Info */}
+                {activeTab === "info" && (
+                  <div id="panel-info" role="tabpanel" aria-labelledby="tab-info" className="space-y-4">
+                    <section>
+                      <h4 className="text-sm font-semibold text-[#0F172A]">Dirección</h4>
+                      <p className="mt-1 text-sm text-slate-700">{addressLine}</p>
+                    </section>
+
+                    {/* Mini mapa clickeable (OpenStreetMap, sin API key) + botón Ver en mapa */}
+                    {(hasQuery || hasLatLng) && mapHref && (
+                      <>
+                        {staticMapSrc && (
+                          <a
+                            href={mapHref}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block mt-3 mb-3 rounded-xl overflow-hidden border border-black/10 hover:opacity-95 transition"
+                            title="Abrir en Google Maps"
+                          >
+                            <img
+                              src={staticMapSrc}
+                              alt={`Mapa de ${cafe?.name ?? "cafetería"}`}
+                              className="w-full h-[140px] object-cover"
+                              loading="lazy"
+                            />
+                          </a>
+                        )}
+                        <a
+                          href={mapHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+                        >
+                          Ver en mapa
+                        </a>
+                      </>
+                    )}
+
+                    <section>
+                      <h4 className="text-sm font-semibold text-[#0F172A]">Horario</h4>
+                      <p className="mt-1 text-sm text-slate-700">{hoursLine}</p>
+                    </section>
+
+                    {/* Contacto: tel + WhatsApp, botones lado a lado */}
+                    <section>
+                      <h4 className="text-sm font-semibold text-[#0F172A]">Contacto</h4>
+                      {hasContact ? (
+                        <>
+                          {(phone || whatsapp) && (
+                            <p className="mt-1 text-sm text-slate-700">
+                              {phone && whatsapp && phone !== whatsapp ? `${phone} · ${whatsapp}` : (phone || whatsapp)}
+                            </p>
+                          )}
+                          <div className="mt-3 grid grid-cols-2 gap-2">
+                            {phone && (
+                              <a href={telHref} className="inline-block">
+                                <Button type="button" variant="ghost" size="sm" className="w-full border border-slate-200">
+                                  Llamar
+                                </Button>
+                              </a>
+                            )}
+                            {whatsapp && (
+                              <a href={waHref} target="_blank" rel="noopener noreferrer" className="inline-block">
+                                <Button type="button" variant="danger" size="sm" className="w-full">
+                                  WhatsApp
+                                </Button>
+                              </a>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <p className="mt-1 text-sm text-slate-500">—</p>
+                      )}
+                    </section>
+                  </div>
+                )}
+
+                {/* Panel Promos */}
+                {activeTab === "promos" && (
+                  <div id="panel-promos" role="tabpanel" aria-labelledby="tab-promos">
+                    <h4 className="text-sm font-semibold text-[#0F172A]">Promos activas</h4>
+                    {(data?.promos ?? []).length === 0 ? (
+                      <p className="mt-2 text-sm text-slate-600">Ninguna por el momento</p>
+                    ) : (
+                      <ul className="mt-3 space-y-2">
+                        {(data?.promos ?? []).map((p) => (
+                          <li
+                            key={p.promo_id}
+                            className="rounded-xl border border-[rgba(15,23,42,0.1)] bg-white/50 px-4 py-3"
+                          >
+                            <span className="font-medium text-[#0F172A]">{p.title}</span>
+                            {p.description && (
+                              <p className="mt-1 text-xs text-slate-600">{p.description}</p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {/* Panel Reseñas */}
+                {activeTab === "resenas" && (
+                  <div id="panel-resenas" role="tabpanel" aria-labelledby="tab-resenas" className="space-y-4">
+                    <div>
+                      <h4 className="text-sm font-semibold text-[#0F172A]">Reseñas</h4>
+                      {data?.reviewsStats != null ? (
+                        <p className="mt-1 text-sm text-slate-700">
+                          ⭐ {Number(data.reviewsStats.avg_rating).toFixed(1)}
+                          <span className="text-slate-500"> ({data.reviewsStats.reviews_count})</span>
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-sm text-slate-600">Aún no hay reseñas</p>
+                      )}
+                    </div>
+                    {(data?.reviews ?? []).length > 0 && (
+                      <div className="space-y-3">
+                        {(data?.reviews ?? []).map((r) => (
+                          <div
+                            key={r.id}
+                            className="rounded-xl border border-[rgba(15,23,42,0.1)] bg-white/50 p-3"
+                          >
+                            <div className="text-sm font-medium text-[#0F172A]">⭐ {r.rating}</div>
+                            {r.comment && <p className="mt-1 text-sm text-slate-600">{r.comment}</p>}
+                            <p className="mt-1 text-xs text-slate-400">{formatReviewDate(r.created_at)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {!isAdmin && (
+                      <div className="pt-2">
+                        <p className="mb-2 text-sm font-medium text-slate-700">Calificar</p>
+                        <div className="mb-3 flex gap-2">
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => setRating(n)}
+                              className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/40 ${
+                                rating === n
+                                  ? "border-red-600 bg-red-600 text-white"
+                                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                              }`}
+                            >
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                        <textarea
+                          className="input min-h-[80px] w-full resize-y"
+                          placeholder="Comentario (opcional)"
+                          value={comment}
+                          onChange={(e) => setComment(e.target.value)}
+                        />
+                        <div className="mt-2">
+                          <Button type="button" variant="danger" size="sm" disabled>
+                            Enviar
+                          </Button>
+                          <p className="mt-1 text-[11px] text-slate-500">Próximamente</p>
+                        </div>
+                      </div>
+                    )}
+                    {isAdmin && (
+                      <p className="text-sm text-slate-600">Solo los clientes pueden calificar.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Panel Historia */}
+                {activeTab === "historia" && (
+                  <div id="panel-historia" role="tabpanel" aria-labelledby="tab-historia">
+                    <h4 className="text-sm font-semibold text-[#0F172A]">Historia</h4>
+                    <p className="mt-2 text-sm text-slate-700 whitespace-pre-wrap">
+                      {(cafe as CafeDetailUI)?.history?.trim() || "Estamos preparando la historia de esta cafetería."}
+                    </p>
+                  </div>
+                )}
+
+                {/* Panel Carta de cafés */}
+                {activeTab === "carta" && (
+                  <div id="panel-carta" role="tabpanel" aria-labelledby="tab-carta">
+                    <h4 className="text-sm font-semibold text-[#0F172A]">Carta de cafés</h4>
+                    <ul className="mt-3 space-y-2 text-sm text-slate-600">
+                      {["Espresso", "Capuccino", "Filtrados", "Especialidad"].map((label) => (
+                        <li key={label} className="rounded-lg border border-[rgba(15,23,42,0.08)] bg-white/40 px-3 py-2">
+                          {label}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-3 text-xs text-slate-500">Próximamente</p>
+                  </div>
+                )}
+
+                {/* Panel Galería */}
+                {activeTab === "galeria" && (
+                  <div id="panel-galeria" role="tabpanel" aria-labelledby="tab-galeria">
+                    <h4 className="text-sm font-semibold text-[#0F172A]">Galería</h4>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {[1, 2, 3].map((i) => (
+                        <div
+                          key={i}
+                          className="aspect-square rounded-xl bg-slate-200/80 border border-[rgba(15,23,42,0.08)]"
+                          aria-hidden
+                        />
+                      ))}
+                    </div>
+                    {(cafe as CafeDetailUI)?.gallery_url ? (
+                      <a
+                        href={(cafe as CafeDetailUI).gallery_url!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-block"
+                      >
+                        <Button type="button" variant="danger" size="sm">
+                          Ver carpeta de fotos
+                        </Button>
+                      </a>
+                    ) : (
+                      <p className="mt-3 text-sm text-slate-500">Fotos próximamente</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Panel Servicios (placeholder) */}
+                {activeTab === "servicios" && (
+                  <div id="panel-servicios" role="tabpanel" aria-labelledby="tab-servicios">
+                    <h4 className="text-sm font-semibold text-[#0F172A]">Servicios</h4>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {["Wifi", "Enchufes", "Pet friendly", "Take away"].map((label) => (
+                        <span
+                          key={label}
+                          className="rounded-full border border-[rgba(15,23,42,0.15)] bg-white/50 px-3 py-1.5 text-sm text-slate-600"
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-xs text-slate-500">Próximamente</p>
+                  </div>
+                )}
+
+                {/* Panel Pagos (placeholder) */}
+                {activeTab === "pagos" && (
+                  <div id="panel-pagos" role="tabpanel" aria-labelledby="tab-pagos">
+                    <h4 className="text-sm font-semibold text-[#0F172A]">Pagos</h4>
+                    <ul className="mt-3 space-y-2 text-sm text-slate-600">
+                      {["Efectivo", "Tarjeta", "Mercado Pago"].map((label) => (
+                        <li key={label} className="rounded-lg border border-[rgba(15,23,42,0.08)] bg-white/40 px-3 py-2">
+                          {label}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-3 text-xs text-slate-500">Próximamente</p>
+                  </div>
+                )}
+            </>
           )}
         </div>
 
-        {/* Contenido */}
-        <div className="p-6 space-y-6">
-          {loading && <p className="text-sm text-slate-600">Cargando…</p>}
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          {!loading && !error && data && (
-            <div className="space-y-5">
-              {/* Imagen de la cafetería (image_code 01..99, fallback cover-default) */}
-              <div className="mb-4 overflow-hidden rounded-2xl border border-[rgba(15,23,42,0.10)]">
-                <div className="relative h-40 w-full">
-                  <Image
-                    src={cafeImgSrc}
-                    alt={data.cafe?.name ? `Foto de ${String(data.cafe.image_code ?? "").padStart(2, "0")} - ${data.cafe.name}` : "Foto de cafetería"}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 768px) 100vw, 720px"
-                    onError={() => setCafeImgSrc(FALLBACK_COVER)}
-                  />
-                </div>
-              </div>
-
-              {/* Ubicación */}
-              <section>
-                <h3 className="text-sm font-semibold text-[#0F172A]">Ubicación</h3>
-                <p className="mt-1 text-sm text-slate-700">
-                  {[data.cafe.city, data.cafe.address].filter(Boolean).join(" · ") || "—"}
-                </p>
-                <a
-                  href={mapHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-block"
-                >
-                  <Button type="button" variant="ghost" size="sm">
-                    Ver en mapa
-                  </Button>
-                </a>
-              </section>
-
-              {/* Horario */}
-              <section>
-                <h3 className="text-sm font-semibold text-[#0F172A]">Horario</h3>
-                <p className="mt-1 text-sm text-slate-700">
-                  {data.cafe.hours_text?.trim() || "Horario a confirmar"}
-                </p>
-              </section>
-
-              {/* Promos activas */}
-              <section>
-                <h3 className="text-sm font-semibold text-[#0F172A]">Promos activas</h3>
-                {data.promos.length === 0 ? (
-                  <p className="mt-1 text-sm text-slate-600">Ninguna por el momento</p>
-                ) : (
-                  <ul className="mt-2 space-y-2">
-                    {data.promos.slice(0, 3).map((p) => (
-                      <li key={p.promo_id} className="rounded-lg border border-[rgba(15,23,42,0.1)] bg-white/50 px-3 py-2">
-                        <span className="font-medium text-[#0F172A]">{p.title}</span>
-                        {p.description && (
-                          <p className="mt-0.5 text-xs text-slate-600">{p.description}</p>
-                        )}
-                      </li>
-                    ))}
-                    {data.promos.length > 3 && (
-                      <p className="text-xs text-slate-500">Ver todas (próximamente)</p>
-                    )}
-                  </ul>
-                )}
-              </section>
-
-              {/* Reseñas: siempre visible (admin + cliente). Promedio, cantidad y lista. */}
-              <section>
-                <h3 className="text-sm font-semibold text-[#0F172A]">Reseñas</h3>
-                <p className="mt-1 text-sm text-slate-700">
-                  ⭐ {data.reviewsStats ? Number(data.reviewsStats.avg_rating).toFixed(1) : "—"}
-                  {data.reviewsStats != null && (
-                    <span className="text-slate-500"> ({data.reviewsStats.reviews_count})</span>
-                  )}
-                </p>
-                {(data.reviews ?? []).length > 0 ? (
-                  <div className="mt-3 space-y-3">
-                    {(data.reviews ?? []).map((r) => (
-                      <div
-                        key={r.id}
-                        className="rounded-xl border border-[rgba(15,23,42,0.1)] bg-white/50 p-3"
-                      >
-                        <div className="text-sm font-medium text-[#0F172A]">⭐ {r.rating}</div>
-                        {r.comment ? (
-                          <div className="mt-1 text-sm text-slate-600">{r.comment}</div>
-                        ) : null}
-                        <div className="mt-1 text-xs text-slate-400">
-                          {formatReviewDate(r.created_at)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-sm text-slate-600">Aún no hay reseñas.</p>
-                )}
-
-                {/* Calificar / Guardar: solo clientes. Admin ve mensaje. */}
-                {!isAdmin ? (
-                  <div className="mt-4">
-                    <p className="mb-2 text-xs font-medium text-slate-600">Calificar</p>
-                    <div className="mb-3 flex gap-2">
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => setRating(n)}
-                          className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                            rating === n
-                              ? "border-red-600 bg-red-600 text-white"
-                              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                          }`}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                    <textarea
-                      className="input min-h-[80px] resize-y"
-                      placeholder="Comentario (opcional)"
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                    />
-                    <Button
-                      type="button"
-                      variant="danger"
-                      size="sm"
-                      className="mt-2 w-full sm:w-auto"
-                      disabled={rating < 1 || savingReview}
-                      onClick={handleSaveReview}
-                    >
-                      {savingReview ? "Guardando…" : "Guardar reseña"}
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="mt-4 text-sm text-slate-600">Solo los clientes pueden calificar.</p>
-                )}
-              </section>
-
-              {/* Cerrar */}
-              <div className="pt-2">
-                <Button type="button" variant="danger" className="w-full sm:w-auto" onClick={onClose}>
-                  Cerrar
-                </Button>
-              </div>
-            </div>
-          )}
+        {/* Footer: botón Cerrar siempre visible */}
+        <div className="shrink-0 border-t border-[rgba(15,23,42,0.1)] p-4">
+          <Button type="button" variant="danger" className="w-full sm:w-auto" onClick={onClose}>
+            Cerrar
+          </Button>
         </div>
       </div>
     </div>

@@ -140,7 +140,7 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
   const greeting = session?.fullName?.trim() ? `Hola, ${session.fullName.trim()}` : "Hola 👋";
 
   return (
-    <main>
+    <main className="consumer-panel-bg">
       <Container>
         <PageHeader
           title={<AppMark className="text-2xl font-semibold tracking-tight text-[#0F172A]" iconSize={32} />}
@@ -231,7 +231,7 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
           {/* IZQUIERDA (25%) — Una card unificada: nivel + métricas */}
           <div className="md:col-span-3">
-            <Card className="mb-4 !bg-[#F6EFE6] p-4 space-y-3">
+            <Card className="mb-4 p-4 space-y-3 glass-soft">
               {/* FILA 1 — NIVEL */}
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -296,7 +296,7 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
             </Card>
 
             {/* Acciones rápidas */}
-            <Card className="mb-6 !bg-[#F6EFE6] p-4">
+            <Card className="mb-6 p-4 glass-soft">
               <div className="flex items-baseline justify-between">
                 <h3 className="text-sm font-semibold text-slate-900">Acciones rápidas</h3>
                 <span className="text-[12px] text-slate-500">Atajos</span>
@@ -305,14 +305,14 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
                 <button
                   type="button"
                   onClick={() => document.getElementById("seccion-movimientos")?.scrollIntoView({ behavior: "smooth" })}
-                  className="h-10 w-full rounded-xl text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50"
+                  className="h-10 w-full rounded-xl text-sm font-semibold glass-soft-ghost text-slate-800"
                 >
                   Ver historial
                 </button>
                 <button
                   type="button"
                   onClick={() => document.getElementById("seccion-explorar")?.scrollIntoView({ behavior: "smooth" })}
-                  className="h-10 w-full rounded-xl text-sm font-semibold border border-slate-200 bg-white hover:bg-slate-50"
+                  className="h-10 w-full rounded-xl text-sm font-semibold glass-soft-ghost text-slate-800"
                 >
                   Explorar
                 </button>
@@ -322,7 +322,7 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
 
           {/* DERECHA (75%) - Carrusel promos */}
           <div id="seccion-promociones" className="md:col-span-9 scroll-mt-4">
-            <Card className="!bg-[#F6EFE6] md:h-[420px] flex flex-col">
+            <Card className="md:h-[420px] flex flex-col glass-soft overflow-hidden">
               <div className="flex items-center justify-between shrink-0">
                 <div>
                   <CardTitle>Promociones</CardTitle>
@@ -349,7 +349,7 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
               </div>
 
               {/* Contenedor scrolleable en desktop para emparejar altura con columna izquierda */}
-              <div className="mt-3 flex-1 min-h-0 overflow-auto pr-1">
+              <div className="mt-3 flex-1 min-h-0 overflow-auto pr-1 bg-white/10">
                 <div
                   ref={promoScrollRef}
                   className="flex items-stretch gap-4 overflow-x-auto pb-2 snap-x snap-mandatory hide-scrollbar"
@@ -446,6 +446,7 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
           <CafeInfoModal
             open={!!openCafeId}
             cafeId={openCafeId ?? ""}
+            cafeName={cafesList.find((c) => c.id === openCafeId)?.name}
             onClose={() => setOpenCafeId(null)}
             isAdmin={data.session.role === "admin"}
           />

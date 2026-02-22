@@ -144,6 +144,7 @@ export default function CafeListClient({ cafes: initialCafes, nextCode }: Props)
         <CafeInfoModal
           open={true}
           cafeId={openInfoCafeId}
+          cafeName={initialCafes.find((c) => c.id === openInfoCafeId)?.name}
           onClose={() => setOpenInfoCafeId(null)}
           isAdmin={true}
         />

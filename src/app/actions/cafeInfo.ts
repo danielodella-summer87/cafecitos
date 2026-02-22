@@ -19,25 +19,47 @@ export type CafePublicInfo = {
     hours_text: string | null;
     image_code: string | null;
     is_active: boolean;
+    lat: number | null;
+    lng: number | null;
   };
   reviewsStats: { avg_rating: number; reviews_count: number } | null;
   reviews: CafeReviewItem[];
   promos: Array<{ promo_id: string; title: string; description: string | null; image_code: string | null }>;
 };
 
-export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo | null> {
+export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo | (CafePublicInfo & { debug?: unknown }) | { cafe: null; reviewsStats: null; reviews: never[]; promos: never[]; debug?: unknown }> {
   const session = await getSession();
   if (!session) return null;
 
   const supabase = supabaseAdmin();
 
-  const { data: cafe, error: cafeErr } = await supabase
+  const { data: cafe, error: supabaseError } = await supabase
     .from("cafes")
     .select("id, name, city, address, hours_text, image_code, is_active")
     .eq("id", cafeId)
-    .single();
+    .maybeSingle();
 
-  if (cafeErr || !cafe) return null;
+  const debug =
+    process.env.NODE_ENV === "development"
+      ? {
+          cafeId,
+          supabaseError: supabaseError
+            ? { message: supabaseError.message, code: (supabaseError as any).code, details: (supabaseError as any).details }
+            : null,
+          found: !!cafe,
+          is_active: cafe?.is_active ?? null,
+        }
+      : undefined;
+
+  if (supabaseError || !cafe) {
+    return {
+      cafe: null,
+      reviewsStats: null,
+      reviews: [],
+      promos: [],
+      ...(debug !== undefined && { debug }),
+    };
+  }
 
   let reviewsStats: { avg_rating: number; reviews_count: number } | null = null;
   try {
@@ -80,11 +102,23 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
     // vista puede no existir
   }
 
+  const cafePayload: CafePublicInfo["cafe"] = {
+    id: cafe.id,
+    name: cafe.name ?? "",
+    city: cafe.city ?? null,
+    address: cafe.address ?? null,
+    hours_text: cafe.hours_text ?? null,
+    image_code: cafe.image_code ?? null,
+    is_active: cafe.is_active ?? true,
+    lat: null,
+    lng: null,
+  };
   return {
-    cafe: cafe as CafePublicInfo["cafe"],
+    cafe: cafePayload,
     reviewsStats,
     reviews,
     promos,
+    ...(debug !== undefined && { debug }),
   };
 }
 
