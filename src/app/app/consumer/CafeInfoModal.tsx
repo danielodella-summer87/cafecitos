@@ -49,6 +49,25 @@ function formatReviewDate(iso: string): string {
   }
 }
 
+function osmTileUrl(lat: number, lng: number, zoom = 16) {
+  const n = Math.pow(2, zoom);
+
+  // X correcto
+  const x = Math.floor(((lng + 180) / 360) * n);
+
+  // Y correcto (IMPORTANTE: usar fórmula estándar Web Mercator)
+  const latRad = (lat * Math.PI) / 180;
+  const y = Math.floor(
+    (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n
+  );
+
+  // clamp seguridad
+  const tileX = Math.max(0, Math.min(n - 1, x));
+  const tileY = Math.max(0, Math.min(n - 1, y));
+
+  return `https://tile.openstreetmap.org/${zoom}/${tileX}/${tileY}.png`;
+}
+
 /** Normaliza teléfono: quita espacios, guiones, paréntesis. Para wa.me sin '+'. */
 function normalizePhone(input: string): string {
   const cleaned = input.replace(/[\s\-()]/g, "").replace(/^\+/, "");
@@ -119,19 +138,11 @@ export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false, 
   const addressText = [city, address].filter(Boolean).join(", ");
   const query = [city, address].filter(Boolean).join(" ");
   const hasQuery = query.trim().length > 0;
-  const hasLatLng = cafe?.lat != null && cafe?.lng != null;
-  const mapHref =
-    hasLatLng && cafe
-      ? `https://www.google.com/maps?q=${cafe.lat},${cafe.lng}`
-      : hasQuery
-        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
-        : null;
-  const staticMapSrc =
-    hasLatLng && cafe
-      ? `https://staticmap.openstreetmap.de/staticmap.php?center=${cafe.lat},${cafe.lng}&zoom=16&size=640x220&maptype=mapnik&markers=${cafe.lat},${cafe.lng},red-pushpin`
-      : hasQuery
-        ? "/images/map-preview-wide.svg"
-        : null;
+  const lat = cafe?.lat ?? null;
+  const lng = cafe?.lng ?? null;
+  const hasLatLng = lat != null && lng != null;
+  const mapHref = hasLatLng ? `https://www.google.com/maps?q=${lat},${lng}` : null;
+  const mapImgSrc = hasLatLng ? osmTileUrl(lat!, lng!, 16) : null;
 
   const phone = cafe?.phone?.trim() || null;
   const whatsapp = cafe?.whatsapp?.trim() || cafe?.phone?.trim() || null;
@@ -353,21 +364,12 @@ export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false, 
                     {/* Mini mapa clickeable (OpenStreetMap, sin API key) + botón Ver en mapa */}
                     {(hasQuery || hasLatLng) && mapHref && (
                       <>
-                        {staticMapSrc && (
-                          <a
-                            href={mapHref}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block mt-3 mb-3 rounded-xl overflow-hidden border border-black/10 hover:opacity-95 transition"
-                            title="Abrir en Google Maps"
-                          >
-                            <img
-                              src={staticMapSrc}
-                              alt={`Mapa de ${cafe?.name ?? "cafetería"}`}
-                              className="w-full h-[140px] object-cover"
-                              loading="lazy"
-                            />
-                          </a>
+                        {hasLatLng && (
+                          <iframe
+                            src={`https://www.openstreetmap.org/export/embed.html?bbox=${lng! - 0.002},${lat! - 0.002},${lng! + 0.002},${lat! + 0.002}&layer=mapnik&marker=${lat!},${lng!}`}
+                            className="w-full h-[140px] border-0 rounded-lg"
+                            loading="lazy"
+                          />
                         )}
                         <a
                           href={mapHref}
@@ -377,6 +379,22 @@ export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false, 
                         >
                           Ver en mapa
                         </a>
+                        {process.env.NODE_ENV === "development" && (mapHref || mapImgSrc) && (
+                          <div style={{ fontSize: 12, marginTop: 8, wordBreak: "break-all" }}>
+                            {mapHref && (
+                              <>
+                                <div><b>MAP URL:</b></div>
+                                <a href={mapHref} target="_blank" rel="noreferrer">{mapHref}</a>
+                              </>
+                            )}
+                            {mapImgSrc && (
+                              <>
+                                <div style={{ marginTop: 6 }}><b>TILE URL (pegá en el navegador):</b></div>
+                                <a href={mapImgSrc} target="_blank" rel="noreferrer">{mapImgSrc}</a>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </>
                     )}
 

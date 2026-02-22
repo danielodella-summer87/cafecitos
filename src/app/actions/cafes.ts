@@ -26,6 +26,14 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
+const toNullableFloat = (v: unknown): number | null => {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+};
+
 async function getNextAvailableImageCode(): Promise<string> {
   const sb = supabaseAdmin();
 
@@ -191,12 +199,6 @@ export async function updateCafe(input: UpdateCafeInput) {
 
   const image_code = (input.image_code ?? "").toString().trim().padStart(2, "0") || "01";
 
-  const lat = input.lat != null && Number.isFinite(Number(input.lat)) ? Number(input.lat) : null;
-  const lng = input.lng != null && Number.isFinite(Number(input.lng)) ? Number(input.lng) : null;
-  if ((lat != null && lng == null) || (lat == null && lng != null)) {
-    throw new Error("Lat/Lng inválidos.");
-  }
-
   const { data: cafe, error: upErr } = await sb
     .from("cafes")
     .update({
@@ -210,8 +212,8 @@ export async function updateCafe(input: UpdateCafeInput) {
       hours_text: (input.hours_text ?? "").trim() || null,
       image_code,
       is_active: input.is_active ?? true,
-      lat: lat ?? null,
-      lng: lng ?? null,
+      lat: toNullableFloat(input.lat),
+      lng: toNullableFloat(input.lng),
     })
     .eq("id", id)
     .select("id, name, image_code, is_active")
