@@ -35,7 +35,8 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
 
   const supabase = supabaseAdmin();
 
-  let cafe: { id: string; name: string | null; city: string | null; address: string | null; hours_text: string | null; image_code: string | null; is_active: boolean; lat?: number | null; lng?: number | null } | null = null;
+  type CafeRow = { id: string; name: string | null; city: string | null; address: string | null; hours_text: string | null; image_code: string | null; is_active: boolean; lat?: number | null; lng?: number | null };
+  let cafe: CafeRow | null = null;
   let supabaseError: { message?: string } | null = null;
 
   const { data: cafeWithCoords, error: errWithCoords } = await supabase
@@ -54,7 +55,7 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
         .eq("id", cafeId)
         .maybeSingle();
       if (!errBase && cafeBase) {
-        cafe = { ...cafeBase, lat: null, lng: null } as typeof cafe;
+        cafe = { ...cafeBase, lat: null, lng: null } as CafeRow;
       } else {
         supabaseError = errBase;
       }
@@ -62,7 +63,7 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
       supabaseError = errWithCoords;
     }
   } else if (cafeWithCoords) {
-    cafe = cafeWithCoords as typeof cafe;
+    cafe = cafeWithCoords as CafeRow;
   }
 
   const debug =

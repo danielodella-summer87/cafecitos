@@ -175,7 +175,7 @@ export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false, 
     setCafeImgSrc(FALLBACK_COVER);
     getCafePublicInfo(cafeId)
       .then((res) => {
-        setData(res);
+        setData(res as CafePublicInfo | null);
         const c = (res as any)?.cafe ?? (res as any)?.data?.cafe ?? res;
         if (c?.image_code != null) {
           const code2 = String(c.image_code).padStart(2, "0");
