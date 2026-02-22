@@ -15,6 +15,8 @@ type StaffRow = {
 export default function EditCafeClient({
   cafe,
   staff,
+  debugRole,
+  debugCafeId,
 }: {
   cafe: {
     id: string;
@@ -32,8 +34,11 @@ export default function EditCafeClient({
     lng?: number | null;
   };
   staff: StaffRow[];
+  debugRole?: string;
+  debugCafeId?: string;
 }) {
   const router = useRouter();
+  const isDev = process.env.NODE_ENV === "development";
 
   const initial = {
     id: cafe.id,
@@ -57,6 +62,11 @@ export default function EditCafeClient({
 
   return (
     <Container>
+      {isDev && (debugRole != null || debugCafeId != null) && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <strong>DEBUG ROLE:</strong> {debugRole ?? "null"} · <strong>DEBUG cafeId:</strong> {debugCafeId ?? "—"}
+        </div>
+      )}
       <PageHeader
         title={
           <span className="inline-flex items-center gap-2">

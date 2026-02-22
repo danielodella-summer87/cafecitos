@@ -33,25 +33,58 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
 
   const supabase = supabaseAdmin();
 
-  const { data: cafe, error: supabaseError } = await supabase
+  let cafe: { id: string; name: string | null; city: string | null; address: string | null; hours_text: string | null; image_code: string | null; is_active: boolean; lat?: number | null; lng?: number | null } | null = null;
+  let supabaseError: { message?: string } | null = null;
+
+  const { data: cafeWithCoords, error: errWithCoords } = await supabase
     .from("cafes")
     .select("id, name, city, address, hours_text, image_code, is_active, lat, lng")
     .eq("id", cafeId)
     .maybeSingle();
+
+  if (errWithCoords) {
+    const msg = (errWithCoords as { message?: string })?.message ?? "";
+    const missingColumn = /column.*(lat|lng).*does not exist/i.test(msg) || msg.includes("lat") || msg.includes("lng");
+    if (missingColumn) {
+      const { data: cafeBase, error: errBase } = await supabase
+        .from("cafes")
+        .select("id, name, city, address, hours_text, image_code, is_active")
+        .eq("id", cafeId)
+        .maybeSingle();
+      if (!errBase && cafeBase) {
+        cafe = { ...cafeBase, lat: null, lng: null } as typeof cafe;
+      } else {
+        supabaseError = errBase;
+      }
+    } else {
+      supabaseError = errWithCoords;
+    }
+  } else if (cafeWithCoords) {
+    cafe = cafeWithCoords as typeof cafe;
+  }
 
   const debug =
     process.env.NODE_ENV === "development"
       ? {
           cafeId,
           supabaseError: supabaseError
-            ? { message: supabaseError.message, code: (supabaseError as any).code, details: (supabaseError as any).details }
+            ? { message: (supabaseError as any).message, code: (supabaseError as any).code, details: (supabaseError as any).details }
             : null,
           found: !!cafe,
           is_active: cafe?.is_active ?? null,
         }
       : undefined;
 
-  if (supabaseError || !cafe) {
+  if (supabaseError && !cafe) {
+    return {
+      cafe: null,
+      reviewsStats: null,
+      reviews: [],
+      promos: [],
+      ...(debug !== undefined && { debug }),
+    };
+  }
+  if (!cafe) {
     return {
       cafe: null,
       reviewsStats: null,
