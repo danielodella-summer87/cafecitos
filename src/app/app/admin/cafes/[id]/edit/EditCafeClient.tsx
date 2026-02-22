@@ -28,6 +28,8 @@ export default function EditCafeClient({
     image_code?: string | null;
     is_active?: boolean | null;
     hours_text?: string | null;
+    lat?: number | null;
+    lng?: number | null;
   };
   staff: StaffRow[];
 }) {
@@ -45,6 +47,8 @@ export default function EditCafeClient({
     hours_text: cafe.hours_text ?? "",
     image_code: cafe.image_code ?? "",
     is_active: cafe.is_active ?? true,
+    lat: cafe.lat ?? undefined,
+    lng: cafe.lng ?? undefined,
     staff:
       staff.length > 0
         ? staff

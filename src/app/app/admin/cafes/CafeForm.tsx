@@ -24,6 +24,8 @@ type InitialValues = {
   hours_text?: string;
   image_code?: string;
   is_active?: boolean;
+  lat?: string | number | null;
+  lng?: string | number | null;
   staff?: Staff[];
 };
 
@@ -54,6 +56,16 @@ export default function CafeForm({
   const [phone, setPhone] = useState(initialValues?.phone ?? "");
   const [city, setCity] = useState(initialValues?.city ?? "");
   const [address, setAddress] = useState(initialValues?.address ?? "");
+  const [lat, setLat] = useState(
+    initialValues?.lat != null && initialValues?.lat !== ""
+      ? String(initialValues.lat)
+      : ""
+  );
+  const [lng, setLng] = useState(
+    initialValues?.lng != null && initialValues?.lng !== ""
+      ? String(initialValues.lng)
+      : ""
+  );
   const [hoursText, setHoursText] = useState(initialValues?.hours_text ?? "");
   const [description, setDescription] = useState(initialValues?.description ?? "");
 
@@ -75,9 +87,26 @@ export default function CafeForm({
     setStaff([...staff, { name: "", role: "Staff" }]);
   }
 
+  function parseLatLng(): { lat: number | null; lng: number | null; error?: string } {
+    const latS = lat.trim();
+    const lngS = lng.trim();
+    if (!latS && !lngS) return { lat: null, lng: null };
+    if (latS && !lngS) return { lat: null, lng: null, error: "Completá ambos Latitud y Longitud o dejá ambos vacíos." };
+    if (!latS && lngS) return { lat: null, lng: null, error: "Completá ambos Latitud y Longitud o dejá ambos vacíos." };
+    const latN = Number(latS);
+    const lngN = Number(lngS);
+    if (Number.isNaN(latN) || Number.isNaN(lngN)) return { lat: null, lng: null, error: "Lat/Lng inválidos." };
+    return { lat: latN, lng: lngN };
+  }
+
   async function handleSave() {
     if (!canSave) return;
     setError(null);
+    const { lat: latVal, lng: lngVal, error: latLngError } = parseLatLng();
+    if (latLngError) {
+      setError(latLngError);
+      return;
+    }
     setLoading(true);
     try {
       const code = pad2(initialCode);
@@ -100,6 +129,8 @@ export default function CafeForm({
           description: description.trim() || undefined,
           image_code: code,
           is_active: initialValues.is_active ?? true,
+          lat: latVal,
+          lng: lngVal,
           staff: staffPayload,
         });
         onSave();
@@ -112,6 +143,8 @@ export default function CafeForm({
           hours_text: hoursText.trim() || undefined,
           description: description.trim() || undefined,
           image_code: code,
+          lat: latVal,
+          lng: lngVal,
           staff: staffPayload,
         });
         onSave(cafe);
@@ -156,6 +189,31 @@ export default function CafeForm({
           value={address}
           onChange={(e) => setAddress(e.target.value)}
         />
+        <div className="grid gap-1">
+          <label className="text-sm font-medium text-neutral-700">Latitud</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            className="input"
+            placeholder="-34.8601027"
+            value={lat}
+            onChange={(e) => setLat(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-1">
+          <label className="text-sm font-medium text-neutral-700">Longitud</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            className="input"
+            placeholder="-56.1962562"
+            value={lng}
+            onChange={(e) => setLng(e.target.value)}
+          />
+        </div>
+        <p className="text-xs text-neutral-500">
+          Tip: en Google Maps el formato es @LAT,LNG,ZOOM. Copiá LAT y LNG.
+        </p>
         <input
           className="input"
           placeholder="Horario (ej: Lun–Vie 8–19 / Sáb 9–13)"

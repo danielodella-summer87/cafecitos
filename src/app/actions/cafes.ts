@@ -1,7 +1,6 @@
 "use server";
 
 import { getSession } from "@/lib/auth/session";
-import { geocodeAddress } from "@/lib/server/geocode";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export type CreateCafeInput = {
@@ -14,6 +13,8 @@ export type CreateCafeInput = {
   description?: string;
   hours_text?: string;
   image_code: string; // "01".."99"
+  lat?: number | null;
+  lng?: number | null;
   staff: Array<{
     name: string;
     role: string;
@@ -72,6 +73,12 @@ export async function createCafe(
     (input.image_code ?? "").trim() || (await getNextAvailableImageCode());
   const codePadded = /^[0-9]{2}$/.test(image_code) ? image_code : pad2(Number(image_code) || 1);
 
+  const lat = input.lat != null && Number.isFinite(Number(input.lat)) ? Number(input.lat) : null;
+  const lng = input.lng != null && Number.isFinite(Number(input.lng)) ? Number(input.lng) : null;
+  if ((lat != null && lng == null) || (lat == null && lng != null)) {
+    throw new Error("Lat/Lng inválidos.");
+  }
+
   const { data: cafe, error: cafeErr } = await sb
     .from("cafes")
     .insert({
@@ -85,6 +92,8 @@ export async function createCafe(
       hours_text: (input.hours_text ?? "").trim() || null,
       image_code: codePadded,
       is_active: true,
+      lat: lat ?? null,
+      lng: lng ?? null,
     })
     .select("id, name, image_code")
     .single();
@@ -122,23 +131,6 @@ export async function createCafe(
     if (staffErr2) throw new Error(`createCafe insert cafe_staff (fallback): ${(staffErr2 as any)?.message ?? ""}`);
   }
 
-  const addressText = `${(input.city ?? "").trim()} ${(input.address ?? "").trim()}`.trim();
-  if (addressText) {
-    const coords = await geocodeAddress(addressText);
-    if (coords) {
-      await sb
-        .from("cafes")
-        .update({
-          lat: coords.lat,
-          lng: coords.lng,
-          geocoded_at: new Date().toISOString(),
-          geocode_source: "nominatim",
-          geocode_query: addressText,
-        })
-        .eq("id", cafe.id);
-    }
-  }
-
   return cafe as { id: string; name: string; image_code: string };
 }
 
@@ -172,6 +164,8 @@ export type UpdateCafeInput = {
   hours_text?: string;
   image_code: string;
   is_active?: boolean;
+  lat?: number | null;
+  lng?: number | null;
   staff: Array<{ name: string; role: string; is_owner?: boolean }>;
 };
 
@@ -197,6 +191,12 @@ export async function updateCafe(input: UpdateCafeInput) {
 
   const image_code = (input.image_code ?? "").toString().trim().padStart(2, "0") || "01";
 
+  const lat = input.lat != null && Number.isFinite(Number(input.lat)) ? Number(input.lat) : null;
+  const lng = input.lng != null && Number.isFinite(Number(input.lng)) ? Number(input.lng) : null;
+  if ((lat != null && lng == null) || (lat == null && lng != null)) {
+    throw new Error("Lat/Lng inválidos.");
+  }
+
   const { data: cafe, error: upErr } = await sb
     .from("cafes")
     .update({
@@ -210,6 +210,8 @@ export async function updateCafe(input: UpdateCafeInput) {
       hours_text: (input.hours_text ?? "").trim() || null,
       image_code,
       is_active: input.is_active ?? true,
+      lat: lat ?? null,
+      lng: lng ?? null,
     })
     .eq("id", id)
     .select("id, name, image_code, is_active")
@@ -240,32 +242,6 @@ export async function updateCafe(input: UpdateCafeInput) {
     const fallback = staffRows.map(({ can_issue, can_redeem, ...rest }) => rest);
     const { error: e2 } = await sb.from("cafe_staff").insert(fallback);
     if (e2) throw new Error(`updateCafe staff: ${(e2 as Error).message}`);
-  }
-
-  const addressTextNew = `${(input.city ?? "").trim()} ${(input.address ?? "").trim()}`.trim();
-  if (addressTextNew) {
-    const { data: current } = await sb
-      .from("cafes")
-      .select("lat, lng, geocode_query")
-      .eq("id", id)
-      .single();
-    const hasCoords = current?.lat != null && current?.lng != null;
-    const queryUnchanged = (current?.geocode_query ?? "") === addressTextNew;
-    if (!hasCoords || !queryUnchanged) {
-      const coords = await geocodeAddress(addressTextNew);
-      if (coords) {
-        await sb
-          .from("cafes")
-          .update({
-            lat: coords.lat,
-            lng: coords.lng,
-            geocoded_at: new Date().toISOString(),
-            geocode_source: "nominatim",
-            geocode_query: addressTextNew,
-          })
-          .eq("id", id);
-      }
-    }
   }
 
   return cafe as { id: string; name: string; image_code: string; is_active: boolean };

@@ -15,7 +15,7 @@ export default async function EditCafePage({ params }: Props) {
 
   const { data: cafe, error: cafeErr } = await supabase
     .from("cafes")
-    .select("id, name, city, address, phone, email, instagram, description, image_code, is_active, hours_text")
+    .select("id, name, city, address, phone, email, instagram, description, image_code, is_active, hours_text, lat, lng")
     .eq("id", id)
     .maybeSingle();
 

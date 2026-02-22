@@ -35,7 +35,7 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
 
   const { data: cafe, error: supabaseError } = await supabase
     .from("cafes")
-    .select("id, name, city, address, hours_text, image_code, is_active")
+    .select("id, name, city, address, hours_text, image_code, is_active, lat, lng")
     .eq("id", cafeId)
     .maybeSingle();
 
@@ -110,8 +110,8 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
     hours_text: cafe.hours_text ?? null,
     image_code: cafe.image_code ?? null,
     is_active: cafe.is_active ?? true,
-    lat: null,
-    lng: null,
+    lat: cafe.lat != null ? Number(cafe.lat) : null,
+    lng: cafe.lng != null ? Number(cafe.lng) : null,
   };
   return {
     cafe: cafePayload,
