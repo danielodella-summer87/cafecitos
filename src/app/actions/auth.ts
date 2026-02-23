@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { setSessionCookie, signSessionToken, clearSessionCookie } from "@/lib/auth/session";
+import { getDashboardPath, setSessionCookie, signSessionToken, clearSessionCookie } from "@/lib/auth/session";
 
 const loginSchema = z.object({
   cedula: z.string().regex(/^\d{8}$/, "La cédula debe tener 8 dígitos"),
@@ -54,7 +54,7 @@ export async function signInCafeStaff(input: { cedula: string; pin: string }) {
   });
   await setSessionCookie(token);
 
-  const redirectTo = row.is_owner ? "/app/owner" : "/app/choose-mode";
+  const redirectTo = row.is_owner ? getDashboardPath("owner") : "/app/choose-mode";
   return { ok: true, redirectTo };
 }
 
@@ -101,9 +101,11 @@ export async function loginUser(input: FormData | { cedula: string; pin: string 
 
   await setSessionCookie(token);
 
-  let redirectTo = "/app/consumer";
-  if (profile.role === "owner") redirectTo = "/app/owner";
-  if (profile.role === "admin") redirectTo = "/app/admin";
+  // Fuente única: owner/admin/staff nunca a consumer. Staff va a choose-mode.
+  const redirectTo =
+    profile.role === "staff"
+      ? "/app/choose-mode"
+      : getDashboardPath(profile.role as "owner" | "admin" | "consumer");
 
   return { ok: true, redirectTo };
 }

@@ -1,5 +1,29 @@
 import { cookies } from "next/headers"
+
 export const COOKIE_NAME = "cafecitos_session"
+
+/** Cookie de modo para staff: "staff" | "consumer". 30 días. */
+export const MODE_COOKIE_NAME = "cafecitos_mode"
+export const MODE_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
+
+export type ModeCookieValue = "staff" | "consumer"
+
+export async function getModeFromCookie(): Promise<ModeCookieValue | null> {
+  const store = await cookies()
+  const value = store.get(MODE_COOKIE_NAME)?.value
+  if (value === "staff" || value === "consumer") return value
+  return null
+}
+
+export async function setModeCookie(mode: ModeCookieValue) {
+  const store = await cookies()
+  store.set(MODE_COOKIE_NAME, mode, { httpOnly: true, sameSite: "lax", path: "/", maxAge: MODE_COOKIE_MAX_AGE })
+}
+
+export async function clearModeCookie() {
+  const store = await cookies()
+  store.set(MODE_COOKIE_NAME, "", { path: "/", maxAge: 0 })
+}
 export type SessionUser = {
   profileId?: string | null
   staffId?: string | null
@@ -10,6 +34,31 @@ export type SessionUser = {
   is_owner?: boolean
   can_issue?: boolean
   can_redeem?: boolean
+}
+
+/** Redirección post-login y guard de rutas: panel según rol. Staff usa /app/staff (existe en el proyecto). */
+export function getDashboardPath(role: SessionUser["role"]): string {
+  switch (role) {
+    case "owner":
+      return "/app/owner"
+    case "admin":
+      return "/app/admin"
+    case "staff":
+      return "/app/staff"
+    case "consumer":
+    default:
+      return "/app/consumer"
+  }
+}
+
+/** Indica si el rol puede estar en esta path (para guards). /app/consumer solo consumer (o staff con modo consumer). */
+export function isRoleAllowedForPath(role: SessionUser["role"], pathname: string): boolean {
+  if (pathname.startsWith("/app/owner")) return role === "owner"
+  if (pathname.startsWith("/app/admin")) return role === "admin"
+  if (pathname.startsWith("/app/staff")) return role === "staff"
+  if (pathname.startsWith("/app/consumer")) return role === "consumer" || role === "staff"
+  if (pathname.startsWith("/app/choose-mode")) return role === "staff"
+  return true
 }
 
 /** Crea un token tipo JWT (header.payload) para la cookie de sesión. */

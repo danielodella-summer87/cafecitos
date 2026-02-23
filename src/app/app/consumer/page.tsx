@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth/session";
+import { getDashboardPath, getModeFromCookie } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import { getConsumerSummary } from "@/app/actions/consumerSummary";
 import { getCafes } from "@/app/actions/cafes";
@@ -7,8 +8,12 @@ import ConsumerPanelClient from "./ConsumerPanelClient";
 
 export default async function ConsumerPage() {
   const session = await getSession();
-  if (!session || session.role !== "consumer") {
-    redirect("/login");
+  if (!session) redirect("/login");
+  // owner/admin no pueden ver panel consumer: redirigir a su panel
+  if (session.role === "owner" || session.role === "admin") redirect(getDashboardPath(session.role));
+  if (session.role === "staff") {
+    const mode = await getModeFromCookie();
+    if (mode !== "consumer") redirect("/app/choose-mode");
   }
 
   const [data, cafesList, guidesRes] = await Promise.all([

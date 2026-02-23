@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Gift, ChevronDown } from "lucide-react";
 import { logout } from "@/app/actions/logout";
+import { clearModeAndGoToChooseMode } from "@/app/app/choose-mode/actions";
 import type { ConsumerSummaryResult, ConsumerTx, CafeMapItem } from "@/app/actions/consumerSummary";
 import { redeemWelcomeGift } from "@/app/actions/consumerSummary";
 import type { CafeListItem } from "@/app/actions/cafes";
@@ -130,11 +131,20 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
   }
 
   const rightSlot = (
-    <form action={logout}>
-      <Button type="submit" variant="danger" size="sm">
-        Salir
-      </Button>
-    </form>
+    <div className="flex items-center gap-2">
+      {data.session.role === "staff" && (
+        <form action={clearModeAndGoToChooseMode}>
+          <Button type="submit" variant="secondary" size="sm">
+            Cambiar modo
+          </Button>
+        </form>
+      )}
+      <form action={logout}>
+        <Button type="submit" variant="danger" size="sm">
+          Salir
+        </Button>
+      </form>
+    </div>
   );
 
   const greeting = session?.fullName?.trim() ? `Hola, ${session.fullName.trim()}` : "Hola 👋";
@@ -172,7 +182,7 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
           </div>
         )}
 
-        {!welcomeGiftRedeemed && !justRedeemed && (
+        {data.session.role === "consumer" && !welcomeGiftRedeemed && !justRedeemed && (
           <Card className="mb-6 !bg-[#F6EFE6]">
             <CardTitle>Activar regalo de bienvenida</CardTitle>
             <CardSubtitle>Código recibido por WhatsApp (4 dígitos)</CardSubtitle>
