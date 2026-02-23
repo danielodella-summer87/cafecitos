@@ -6,6 +6,7 @@ import { ownerGetConsumerSummary } from "@/app/actions/ownerSummary";
 import { ownerAddCafecitos } from "@/app/actions/owner";
 import { ownerRedeemCafecitos } from "@/app/actions/ownerRedeem";
 import { logout } from "@/app/actions/auth";
+import { isValidCi, normalizeCi } from "@/lib/ci";
 import { PRO } from "@/lib/ui/pro";
 
 type Props = {
@@ -63,23 +64,22 @@ export default function StaffPanelClient({ canIssue, canRedeem, isInactive = fal
 
   const handleBuscar = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = cedula.replace(/\D/g, "").trim();
-    if (clean.length < 6) {
-      setLookupError("Ingresá una cédula válida (mín. 6 dígitos).");
+    if (!isValidCi(cedula)) {
+      setLookupError("Ingresá los 8 dígitos de la cédula.");
       return;
     }
     setLookupLoading(true);
     setLookupError(null);
     setClient(null);
     try {
-      const res = await ownerGetConsumerSummary({ cedula: clean });
+      const res = await ownerGetConsumerSummary({ cedula: cedula.trim() });
       if (res.error || !res.profile) {
         setLookupError(res.error ?? "No existe un usuario con esa cédula");
         return;
       }
       setClient({
         name: res.profile.full_name ?? "Cliente",
-        cedula: res.profile.cedula ?? clean,
+        cedula: res.profile.cedula ?? cedula.trim(),
         balance: res.balance ?? 0,
         availableInThisCafe: res.availableInThisCafe ?? 0,
       });
@@ -143,6 +143,7 @@ export default function StaffPanelClient({ canIssue, canRedeem, isInactive = fal
   };
 
   const handleLogout = async () => {
+    if (typeof window !== "undefined") localStorage.removeItem("cafecitos.activeRoleMode");
     await logout();
     router.replace("/login");
   };
@@ -195,18 +196,22 @@ export default function StaffPanelClient({ canIssue, canRedeem, isInactive = fal
           <input
             className={PRO.input}
             value={cedula}
-            onChange={(e) => setCedula(e.target.value)}
-            placeholder="Ej: 12345678"
+            onChange={(e) => setCedula(normalizeCi(e.target.value))}
+            placeholder="8 dígitos"
             inputMode="numeric"
+            autoComplete="off"
           />
           <button
             type="submit"
-            disabled={lookupLoading}
+            disabled={!isValidCi(cedula) || lookupLoading}
             className="rounded-lg px-4 py-2 bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50 whitespace-nowrap"
           >
             {lookupLoading ? "Buscando…" : "Buscar"}
           </button>
         </div>
+        {cedula.length > 0 && !isValidCi(cedula) && (
+          <p className="text-xs text-amber-600">La cédula debe tener exactamente 8 dígitos.</p>
+        )}
         {lookupError && <p className="text-sm text-red-600" role="alert">{lookupError}</p>}
       </form>
 

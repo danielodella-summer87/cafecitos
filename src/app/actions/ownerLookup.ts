@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
 
 const schema = z.object({
-  cedula: z.string().min(6),
+  cedula: z.string().regex(/^\d{8}$/, "La cédula debe tener exactamente 8 dígitos"),
 });
 
 export async function ownerLookupConsumer(input: unknown) {

@@ -6,12 +6,12 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { setSessionCookie, signSessionToken, clearSessionCookie } from "@/lib/auth/session";
 
 const loginSchema = z.object({
-  cedula: z.string().min(6),
+  cedula: z.string().regex(/^\d{8}$/, "La cédula debe tener 8 dígitos"),
   pin: z.string().min(4),
 });
 
 const CreateOwnerSchema = z.object({
-  cedula: z.string().min(6),
+  cedula: z.string().regex(/^\d{8}$/, "La cédula debe tener 8 dígitos"),
   pin: z.string().min(3),
   full_name: z.string().min(2),
   cafe_name: z.string().min(2),
@@ -30,7 +30,7 @@ export async function signInCafeStaff(input: { cedula: string; pin: string }) {
   const supabase = supabaseAdmin();
   const { data: rows } = await supabase
     .from("cafe_staff")
-    .select("id, cafe_id, full_name, name, is_owner, can_issue, can_redeem, pin_hash")
+    .select("id, cafe_id, full_name, name, is_owner, can_issue, can_redeem, pin_hash, profile_id")
     .eq("cedula", parsed.data.cedula)
     .eq("is_active", true)
     .limit(1);
@@ -44,6 +44,7 @@ export async function signInCafeStaff(input: { cedula: string; pin: string }) {
   const fullName = (row.full_name ?? row.name ?? "") as string;
   const token = signSessionToken({
     staffId: row.id,
+    profileId: (row as { profile_id?: string | null }).profile_id ?? null,
     role: row.is_owner ? "owner" : "staff",
     cafeId: row.cafe_id ?? null,
     fullName: fullName || null,
@@ -53,7 +54,7 @@ export async function signInCafeStaff(input: { cedula: string; pin: string }) {
   });
   await setSessionCookie(token);
 
-  const redirectTo = row.is_owner ? "/app/owner" : "/app/staff";
+  const redirectTo = row.is_owner ? "/app/owner" : "/app/choose-mode";
   return { ok: true, redirectTo };
 }
 
@@ -112,7 +113,7 @@ export async function registerUser(
 ) {
   const registerSchema = z
     .object({
-      cedula: z.string().min(6),
+      cedula: z.string().regex(/^\d{8}$/, "La cédula debe tener 8 dígitos"),
       pin: z.string().min(4).max(4),
       confirm_pin: z.string().min(4).max(4),
       phone: z.string().min(1, "El teléfono es obligatorio"),

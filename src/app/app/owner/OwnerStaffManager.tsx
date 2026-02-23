@@ -9,6 +9,7 @@ import {
   resetOwnerStaffPin,
   type CafeStaffRow,
 } from "@/app/actions/ownerStaff";
+import { isValidCi, normalizeCi } from "@/lib/ci";
 import Modal from "@/app/ui/Modal";
 
 export default function OwnerStaffManager() {
@@ -56,7 +57,7 @@ export default function OwnerStaffManager() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = addName.trim();
-    const cedula = addCedula.replace(/\D/g, "").trim();
+    const cedula = normalizeCi(addCedula);
     const pin = addPin.trim();
     const pinConfirm = addPinConfirm.trim();
     setAddError(null);
@@ -68,8 +69,8 @@ export default function OwnerStaffManager() {
       setAddError("El rol es obligatorio (mín. 2 caracteres).");
       return;
     }
-    if (!cedula) {
-      setAddError("La cédula es obligatoria (solo dígitos).");
+    if (!isValidCi(cedula)) {
+      setAddError("La cédula debe tener exactamente 8 dígitos.");
       return;
     }
     if (!/^\d{4}$/.test(pin)) {
@@ -412,15 +413,19 @@ export default function OwnerStaffManager() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Cédula (solo dígitos)</label>
+            <label className="block text-sm font-medium mb-1">Cédula (8 dígitos)</label>
             <input
               className="w-full border rounded-lg px-3 py-2 font-mono"
               value={addCedula}
-              onChange={(e) => setAddCedula(e.target.value.replace(/\D/g, ""))}
-              placeholder="Ej: 40031685"
+              onChange={(e) => setAddCedula(normalizeCi(e.target.value))}
+              placeholder="8 dígitos"
               inputMode="numeric"
+              autoComplete="off"
               required
             />
+            {addCedula.length > 0 && !isValidCi(addCedula) && (
+              <p className="text-xs text-amber-600 mt-1">La cédula debe tener exactamente 8 dígitos.</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">PIN (4 dígitos)</label>
@@ -464,7 +469,7 @@ export default function OwnerStaffManager() {
           </label>
           <div className="flex flex-col gap-2 pt-2">
             <div className="flex gap-2">
-              <button type="submit" disabled={addSubmitting} className="rounded-lg px-4 py-2 bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50">
+              <button type="submit" disabled={!isValidCi(addCedula) || addSubmitting} className="rounded-lg px-4 py-2 bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50">
                 {addSubmitting ? "Creando…" : "Crear"}
               </button>
               <button type="button" onClick={() => setAddOpen(false)} className="rounded-lg px-4 py-2 border border-neutral-300 hover:bg-neutral-100">

@@ -22,6 +22,7 @@ import {
 } from "@/app/actions/ownerTransactions";
 import { ownerGetConsumerSummary } from "@/app/actions/ownerSummary";
 import { AppMark } from "@/components/brand/AppMark";
+import { isValidCi, normalizeCi } from "@/lib/ci";
 import { getTxMeta } from "@/lib/ui/txLabels";
 import { PRO } from "@/lib/ui/pro";
 import OwnerStaffManager from "./OwnerStaffManager";
@@ -134,7 +135,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
     return (
       lookup?.profile &&
       lookup.profile.role === "consumer" &&
-      cedula.trim().length >= 6 &&
+      isValidCi(cedula) &&
       Number.isFinite(amount) &&
       amount > 0
     );
@@ -145,7 +146,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
     return (
       !!consumer &&
       consumer.role === "consumer" &&
-      cedula.trim().length >= 6 &&
+      isValidCi(cedula) &&
       Number.isFinite(redeemAmount) &&
       redeemAmount > 0
     );
@@ -374,7 +375,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
       <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold text-[#0F172A]">Panel Cafetería</h1>
-        <form action={logout}>
+        <form action={logout} onSubmit={() => { if (typeof window !== "undefined") localStorage.removeItem("cafecitos.activeRoleMode"); }}>
           <button type="submit" className="bg-red-600 text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-red-700 active:bg-red-800 shadow-sm">
             Salir
           </button>
@@ -768,25 +769,28 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
         <input
           ref={cedulaInputRef}
           value={cedula}
-          onChange={(e) => setCedula(e.target.value)}
-          placeholder="Ej: 40031685"
+          onChange={(e) => setCedula(normalizeCi(e.target.value))}
+          placeholder="8 dígitos"
+          inputMode="numeric"
+          autoComplete="off"
           className="w-full border rounded px-3 py-2"
         />
+        {cedula.length > 0 && !isValidCi(cedula) && (
+          <p className="text-xs text-amber-600">La cédula debe tener exactamente 8 dígitos.</p>
+        )}
 
         <button
           type="button"
           onClick={async () => {
+            if (!isValidCi(cedula)) {
+              setStatus("Ingresá los 8 dígitos de la cédula.");
+              return;
+            }
             setStatus("Buscando...");
 
             try {
               setLoadingLookup(true);
-              const clean = String(cedula ?? "").trim().replace(/\D/g, "");
-              if (clean.length < 6) {
-                setStatus("Ingresá una cédula válida");
-                return;
-              }
-
-              const res = await ownerGetConsumerSummary({ cedula: clean });
+              const res = await ownerGetConsumerSummary({ cedula: cedula.trim() });
               const r = res as Json;
               setLookup({
                 profile: r.profile as LookupState["profile"],
@@ -806,7 +810,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
             }
           }}
           className="mt-2 w-full rounded-xl bg-red-600 text-white py-2 font-semibold hover:bg-red-700 active:bg-red-800 disabled:opacity-50"
-          disabled={loadingLookup}
+          disabled={!isValidCi(cedula) || loadingLookup}
         >
           {loadingLookup ? "Buscando…" : "Buscar"}
         </button>

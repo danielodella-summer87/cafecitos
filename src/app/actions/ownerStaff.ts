@@ -136,7 +136,7 @@ export async function createOwnerStaff(payload: CreateOwnerStaffPayload): Promis
   if (full_name.length < 2) return { ok: false, error: "El nombre debe tener al menos 2 caracteres." };
   if (role.length < 2) return { ok: false, error: "El rol es obligatorio." };
   if (!cedula) return { ok: false, error: "La cédula es obligatoria (solo dígitos)." };
-  if (!/^\d+$/.test(cedula)) return { ok: false, error: "La cédula debe contener solo dígitos." };
+  if (!/^\d{8}$/.test(cedula)) return { ok: false, error: "La cédula debe tener exactamente 8 dígitos." };
   if (!/^\d{4}$/.test(pin_4)) return { ok: false, error: "El PIN debe ser exactamente 4 dígitos." };
 
   let pin_hash: string;

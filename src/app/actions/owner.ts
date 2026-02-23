@@ -6,7 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
 
 const schema = z.object({
-  cedula: z.string().min(6),
+  cedula: z.string().regex(/^\d{8}$/, "La cédula debe tener exactamente 8 dígitos"),
   amount: z.number().int().positive(),
   note: z.string().optional(),
 });
@@ -71,6 +71,21 @@ export async function ownerAddCafecitos(input: FormData | { cedula: string; amou
 
   if (pErr || !profile) throw new Error("No existe un usuario con esa cédula");
   if (profile.role !== "consumer") throw new Error("La cédula no corresponde a un consumidor");
+
+  if (session.role === "staff" && session.cafeId === cafeId) {
+    let staffProfileId: string | null = session.profileId ?? null;
+    if (!staffProfileId && session.staffId) {
+      const { data: staffRow } = await supabase
+        .from("cafe_staff")
+        .select("profile_id")
+        .eq("id", session.staffId)
+        .maybeSingle();
+      staffProfileId = (staffRow as { profile_id?: string | null } | null)?.profile_id ?? null;
+    }
+    if (staffProfileId === profile.id) {
+      throw new Error("No podés asignarte cafecitos a vos mismo en tu propia cafetería.");
+    }
+  }
 
   const { error: tErr } = await supabase.from("point_transactions").insert({
     tx_type: "earn",

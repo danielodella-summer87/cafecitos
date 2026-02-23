@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { loginUser } from "@/app/actions/auth";
+import { isValidCi, normalizeCi } from "@/lib/ci";
 import { PRO } from "@/lib/ui/pro";
 import { AppMark } from "@/components/brand/AppMark";
 
@@ -17,11 +18,15 @@ export default function LoginPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!isValidCi(cedula)) {
+      setStatus("Ingresá los 8 dígitos de la cédula.");
+      return;
+    }
     setLoading(true);
     setStatus(null);
 
     try {
-      const res = await loginUser({ cedula, pin });
+      const res = await loginUser({ cedula: cedula.trim(), pin });
 
       if (!res?.ok) {
         setStatus(res?.error ?? "No se pudo iniciar sesión");
@@ -65,13 +70,17 @@ export default function LoginPage() {
                 type="text"
                 name="cedula"
                 value={cedula}
-                onChange={(e) => setCedula(e.target.value)}
-                placeholder="Los 8 dígitos sin guión"
+                onChange={(e) => setCedula(normalizeCi(e.target.value))}
+                placeholder="8 dígitos"
                 autoComplete="off"
                 className={PRO.input}
                 inputMode="numeric"
+                pattern="[0-9]*"
                 required
               />
+              {cedula.length > 0 && !isValidCi(cedula) && (
+                <p className="text-xs text-amber-600 mt-1">La cédula debe tener exactamente 8 dígitos.</p>
+              )}
             </div>
 
             <div>
@@ -91,7 +100,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={!isValidCi(cedula) || loading}
               className="mt-3 w-full rounded-xl bg-black px-4 py-3 text-base font-semibold text-white hover:bg-black/90 active:bg-black/80 disabled:opacity-50"
             >
               {loading ? "Entrando..." : "Entrar"}
