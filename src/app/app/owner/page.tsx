@@ -1,5 +1,6 @@
 import { getOwnerContext } from "@/app/actions/ownerContext";
 import { getSession } from "@/lib/auth/session";
+import { getDashboardPath } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import OwnerPanelClient from "./OwnerPanelClient";
 
@@ -7,8 +8,7 @@ export default async function OwnerPage() {
   const session = await getSession();
 
   if (!session) redirect("/login?mode=owner");
-  if (session.role === "staff") redirect("/app/staff");
-  if (session.role !== "owner") redirect("/login?mode=owner");
+  if (session.role !== "owner") redirect(getDashboardPath(session.role));
 
   const ctx = await getOwnerContext();
   if (!ctx) {

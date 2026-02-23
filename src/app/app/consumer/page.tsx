@@ -9,7 +9,7 @@ import ConsumerPanelClient from "./ConsumerPanelClient";
 export default async function ConsumerPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  // owner/admin no pueden ver panel consumer: redirigir a su panel
+  // Guard: /app/consumer solo consumer (o staff con modo consumer). owner/admin/staff sin modo → su panel.
   if (session.role === "owner" || session.role === "admin") redirect(getDashboardPath(session.role));
   if (session.role === "staff") {
     const mode = await getModeFromCookie();

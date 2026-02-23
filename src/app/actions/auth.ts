@@ -41,11 +41,25 @@ export async function signInCafeStaff(input: { cedula: string; pin: string }) {
   const valid = await bcrypt.compare(parsed.data.pin, row.pin_hash);
   if (!valid) return { ok: false, error: "PIN incorrecto" };
 
+  const profileId = (row as { profile_id?: string | null }).profile_id ?? null;
+  let role: "owner" | "staff" | "consumer" | "admin" = row.is_owner ? "owner" : "staff";
+  if (profileId) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", profileId)
+      .maybeSingle();
+    const profileRole = (profile as { role?: string } | null)?.role;
+    if (profileRole === "owner" || profileRole === "admin" || profileRole === "staff" || profileRole === "consumer") {
+      role = profileRole;
+    }
+  }
+
   const fullName = (row.full_name ?? row.name ?? "") as string;
   const token = signSessionToken({
     staffId: row.id,
-    profileId: (row as { profile_id?: string | null }).profile_id ?? null,
-    role: row.is_owner ? "owner" : "staff",
+    profileId,
+    role,
     cafeId: row.cafe_id ?? null,
     fullName: fullName || null,
     is_owner: !!row.is_owner,
@@ -54,7 +68,10 @@ export async function signInCafeStaff(input: { cedula: string; pin: string }) {
   });
   await setSessionCookie(token);
 
-  const redirectTo = row.is_owner ? getDashboardPath("owner") : "/app/choose-mode";
+  const redirectTo = role === "staff" ? "/app/choose-mode" : getDashboardPath(role);
+  if (process.env.NODE_ENV === "development") {
+    console.log("[auth] signInCafeStaff", { cedula: parsed.data.cedula, role, redirectTo });
+  }
   return { ok: true, redirectTo };
 }
 
@@ -92,21 +109,25 @@ export async function loginUser(input: FormData | { cedula: string; pin: string 
   const valid = await bcrypt.compare(parsed.data.pin, profile.pin_hash);
   if (!valid) return { ok: false, error: "PIN incorrecto" };
 
+  const role = (profile as { role?: string }).role;
+  const validRoles = ["owner", "admin", "staff", "consumer"];
+  if (!role || !validRoles.includes(role)) {
+    return { ok: false, error: "Rol no válido. Contactá soporte." };
+  }
+
   const token = signSessionToken({
     profileId: profile.id,
-    role: profile.role,
+    role: role as "owner" | "admin" | "staff" | "consumer",
     cafeId: profile.cafe_id ?? null,
     fullName: profile.full_name ?? null,
   });
 
   await setSessionCookie(token);
 
-  // Fuente única: owner/admin/staff nunca a consumer. Staff va a choose-mode.
-  const redirectTo =
-    profile.role === "staff"
-      ? "/app/choose-mode"
-      : getDashboardPath(profile.role as "owner" | "admin" | "consumer");
-
+  const redirectTo = role === "staff" ? "/app/choose-mode" : getDashboardPath(role as "owner" | "admin" | "consumer");
+  if (process.env.NODE_ENV === "development") {
+    console.log("[auth] loginUser profiles", { cedula: parsed.data.cedula, role, redirectTo });
+  }
   return { ok: true, redirectTo };
 }
 

@@ -35,7 +35,7 @@ export default function LoginPage() {
 
       setCedula("");
       setPin("");
-      router.replace(res.redirectTo ?? "/app/consumer");
+      router.replace(res.redirectTo ?? "/login");
     } catch (e: unknown) {
       setStatus(e instanceof Error ? e.message : "Error de login");
     } finally {
