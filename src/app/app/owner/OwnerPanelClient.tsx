@@ -770,7 +770,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
           ref={cedulaInputRef}
           value={cedula}
           onChange={(e) => setCedula(normalizeCi(e.target.value))}
-          placeholder="8 dígitos"
+          placeholder="Ingresá cédula (8 dígitos)"
           inputMode="numeric"
           autoComplete="off"
           className="w-full border rounded px-3 py-2"
