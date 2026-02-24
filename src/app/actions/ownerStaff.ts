@@ -5,13 +5,15 @@ import { getSession } from "@/lib/auth/session";
 import { hashPin } from "@/lib/security/pin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-/** Fila de public.cafe_staff (listado y edición). role = rol visual/cargo (Cajero, Barista, etc.), no app_role. */
+/** Fila de public.cafe_staff (listado y edición). role = cargo en cafetería (cafe_staff.role: admin|staff). profile_role = tipo de usuario (profiles.role). */
 export type CafeStaffRow = {
   id: string;
   cafe_id: string;
   full_name: string | null;
-  /** Rol visual en cafetería (Cajero, Barista, Encargado, etc.), no el enum app_role. */
+  /** Cargo en la cafetería: cafe_staff.role (admin | staff). */
   role: string;
+  /** Tipo de usuario en la app: profiles.role (owner | consumer | staff | admin). Solo informativo. */
+  profile_role: string | null;
   is_active: boolean;
   can_issue: boolean;
   can_redeem: boolean;
@@ -71,13 +73,13 @@ async function ownerGuard(): Promise<{ cafeId: string }> {
   return { cafeId };
 }
 
-/** Listado de staff desde public.cafe_staff; cedula desde cafe_staff o profiles (join por profile_id). role = cargo visual. */
+/** Listado de staff desde public.cafe_staff. Cargo = cafe_staff.role (admin|staff). Tipo de usuario = profiles.role (owner/consumer/...). */
 export async function getOwnerStaff(): Promise<CafeStaffRow[]> {
   const { cafeId } = await ownerGuard();
   const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("cafe_staff")
-    .select("id, cafe_id, full_name, name, role, is_active, can_issue, can_redeem, is_owner, cedula, created_at, profiles(cedula)")
+    .select("id, cafe_id, full_name, name, role, is_active, can_issue, can_redeem, is_owner, cedula, created_at, profiles(cedula, role)")
     .eq("cafe_id", cafeId)
     .order("created_at", { ascending: false });
 
@@ -86,13 +88,16 @@ export async function getOwnerStaff(): Promise<CafeStaffRow[]> {
     throw new Error(error.message ?? "No se pudo cargar el personal.");
   }
   return (data ?? []).map((r: Record<string, unknown>) => {
-    const profilesRow = r.profiles as { cedula?: string } | null | undefined;
+    const profilesRow = r.profiles as { cedula?: string; role?: string } | null | undefined;
     const cedulaFromProfile = profilesRow?.cedula ?? null;
+    const profileRole = profilesRow?.role ?? null;
+    const staffRole = (r.role ?? "") as string;
     return {
       id: r.id as string,
       cafe_id: r.cafe_id as string,
       full_name: (r.full_name ?? r.name ?? null) as string | null,
-      role: (r.role ?? "") as string,
+      role: staffRole,
+      profile_role: profileRole,
       is_active: r.is_active !== false,
       can_issue: r.can_issue !== false,
       can_redeem: r.can_redeem !== false,

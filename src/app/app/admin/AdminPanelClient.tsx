@@ -274,19 +274,6 @@ export default function AdminPanelClient(props: Props) {
               <label className="flex items-start gap-3 border rounded-xl p-4">
                 <input
                   type="checkbox"
-                  checked={settings.cross_cafe_redeem}
-                  onChange={(e) => setSettings({ ...settings, cross_cafe_redeem: e.target.checked })}
-                  className="mt-1"
-                />
-                <div>
-                  <div className="font-medium">Canje cruzado entre cafeterías</div>
-                  <div className="text-sm text-neutral-500">Si está activo, el socio canjea en cualquier cafetería.</div>
-                </div>
-              </label>
-
-              <label className="flex items-start gap-3 border rounded-xl p-4">
-                <input
-                  type="checkbox"
                   checked={settings.show_membership_badge}
                   onChange={(e) => setSettings({ ...settings, show_membership_badge: e.target.checked })}
                   className="mt-1"

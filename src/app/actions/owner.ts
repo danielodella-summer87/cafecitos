@@ -44,7 +44,6 @@ export async function ownerAddCafecitos(input: FormData | { cedula: string; amou
 
   let canIssue: boolean;
   let actorOwnerProfileId: string | null = null;
-  let actorStaffId: string | null = null;
 
   if (session.role === "owner") {
     const { getOwnerContext } = await import("@/app/actions/ownerContext");
@@ -55,7 +54,6 @@ export async function ownerAddCafecitos(input: FormData | { cedula: string; amou
     actorOwnerProfileId = session.profileId ?? null;
   } else if (session.role === "staff") {
     canIssue = session.can_issue === true;
-    actorStaffId = session.staffId ?? null;
     if (!canIssue) throw new Error("No tenés permiso para asignar cafecitos");
   } else {
     throw new Error("Solo dueño o staff pueden asignar cafecitos");
@@ -91,7 +89,6 @@ export async function ownerAddCafecitos(input: FormData | { cedula: string; amou
     tx_type: "earn",
     cafe_id: cafeId,
     actor_owner_profile_id: actorOwnerProfileId,
-    actor_staff_id: actorStaffId,
     to_profile_id: profile.id,
     amount: parsed.amount,
     note: parsed.note || "Carga manual",

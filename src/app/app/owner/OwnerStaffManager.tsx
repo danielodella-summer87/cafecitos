@@ -295,7 +295,7 @@ export default function OwnerStaffManager() {
               <thead>
                 <tr className="border-b border-neutral-300">
                   <th className="p-2 font-medium">Nombre</th>
-                  <th className="p-2 font-medium">Cargo</th>
+                  <th className="p-2 font-medium">Rol</th>
                   <th className="p-2 font-medium">Cédula</th>
                   <th className="p-2 font-medium">Permisos</th>
                   <th className="p-2 font-medium">Estado</th>
@@ -303,10 +303,21 @@ export default function OwnerStaffManager() {
                 </tr>
               </thead>
               <tbody>
-                {list.map((row) => (
+                {list.map((row) => {
+                  const tipoLabel = row.profile_role === "owner" ? "Owner" : (row.role === "admin" || row.role === "staff" ? (row.role.charAt(0).toUpperCase() + row.role.slice(1)) : "—");
+                  const isOwnerTipo = row.profile_role === "owner";
+                  return (
                   <tr key={row.id} className="border-b border-neutral-200">
                     <td className="p-2 font-medium">{row.full_name ?? "—"}</td>
-                    <td className="p-2">{row.role ?? "—"}</td>
+                    <td className="p-2">
+                      {tipoLabel !== "—" ? (
+                        <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${isOwnerTipo ? "bg-amber-100 text-amber-800" : "bg-neutral-100 text-neutral-700"}`}>
+                          {tipoLabel}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="p-2 font-mono text-sm">{row.cedula ?? "—"}</td>
                     <td className="p-2">
                       <span className={`inline-block rounded px-2 py-0.5 text-xs mr-1 ${row.can_issue ? "bg-green-100 text-green-800" : "bg-neutral-200 text-neutral-600"}`}>
@@ -349,13 +360,17 @@ export default function OwnerStaffManager() {
                       </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           <div className="md:hidden space-y-2">
-            {list.map((row) => (
+            {list.map((row) => {
+              const tipoLabel = row.profile_role === "owner" ? "Owner" : (row.role === "admin" || row.role === "staff" ? (row.role.charAt(0).toUpperCase() + row.role.slice(1)) : "—");
+              const isOwnerTipo = row.profile_role === "owner";
+              return (
               <div key={row.id} className="rounded-lg border border-neutral-200 bg-white p-3 shadow-sm">
                 <div className="flex justify-between items-start gap-2">
                   <span className="font-medium">{row.full_name ?? "—"}</span>
@@ -363,7 +378,16 @@ export default function OwnerStaffManager() {
                     {row.is_active ? "Activo" : "Inactivo"}
                   </span>
                 </div>
-                <p className="text-sm text-neutral-500 mt-1">{row.role ?? "—"}</p>
+                <div className="flex flex-wrap items-center gap-2 mt-1 text-sm">
+                  <span className="text-neutral-600"><b>Rol:</b></span>
+                  {tipoLabel !== "—" ? (
+                    <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${isOwnerTipo ? "bg-amber-100 text-amber-800" : "bg-neutral-100 text-neutral-700"}`}>
+                      {tipoLabel}
+                    </span>
+                  ) : (
+                    <span className="text-neutral-500">—</span>
+                  )}
+                </div>
                 {row.cedula && <p className="text-xs text-neutral-400 font-mono">Cédula: {row.cedula}</p>}
                 <div className="flex flex-wrap gap-1 mt-2">
                   <span className={`rounded px-2 py-0.5 text-xs ${row.can_issue ? "bg-green-100 text-green-800" : "bg-neutral-200 text-neutral-600"}`}>Asignar {row.can_issue ? "ON" : "OFF"}</span>
@@ -379,7 +403,8 @@ export default function OwnerStaffManager() {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}

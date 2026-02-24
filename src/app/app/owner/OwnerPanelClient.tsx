@@ -72,20 +72,19 @@ function CafecitosLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-const debug =
-  typeof window !== "undefined" &&
-  new URLSearchParams(window.location.search).get("debug") === "1";
-
 export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Props) {
+  const debugMode =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("debug") === "1";
   const capabilities: OwnerCapabilities = caps ?? { isOwner: true, canIssue: true, canRedeem: true };
   const isOwner = capabilities.isOwner;
   const canIssue = capabilities.canIssue;
   const canRedeem = capabilities.canRedeem;
 
   const [cedula, setCedula] = useState("");
-  const [amount, setAmount] = useState<number>(0);
+  const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
-  const [redeemAmount, setRedeemAmount] = useState<number>(0);
+  const [redeemAmount, setRedeemAmount] = useState("");
   const [redeemNote, setRedeemNote] = useState("");
   const [lookup, setLookup] = useState<LookupState | null>(null);
   const [lastSummary, setLastSummary] = useState<Json | null>(null);
@@ -109,6 +108,11 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
   const [openAdd, setOpenAdd] = useState(false);
   const [openRedeem, setOpenRedeem] = useState(false);
   const [openLast, setOpenLast] = useState(false);
+  const [lastRedeemDebug, setLastRedeemDebug] = useState<unknown>(null);
+  const [lastSummaryDebug, setLastSummaryDebug] = useState<unknown>(null);
+  const [openDebugPanel, setOpenDebugPanel] = useState(false);
+  const [openDebugSaldoPanel, setOpenDebugSaldoPanel] = useState(false);
+  const [crossCafeEnabled, setCrossCafeEnabled] = useState(true);
 
   const [tab, setTab] = useState<"atender" | "historial">("atender");
   const [historialDays, setHistorialDays] = useState<number | "all">(30);
@@ -131,15 +135,18 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
   const [kpis30, setKpis30] = useState<{ generado: number; canjeado: number; neto: number; clientes_unicos: number } | null>(null);
   const [gestionLoading, setGestionLoading] = useState(false);
 
+  const amountNum = useMemo(() => parseInt(amount, 10), [amount]);
+  const redeemAmountNum = useMemo(() => parseInt(redeemAmount, 10), [redeemAmount]);
+
   const canAssign = useMemo(() => {
     return (
       lookup?.profile &&
       lookup.profile.role === "consumer" &&
       isValidCi(cedula) &&
-      Number.isFinite(amount) &&
-      amount > 0
+      !Number.isNaN(amountNum) &&
+      amountNum > 0
     );
-  }, [lookup, cedula, amount]);
+  }, [lookup, cedula, amountNum]);
 
   const consumer = lookup?.profile;
   const redeemFormValid = useMemo(() => {
@@ -147,21 +154,15 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
       !!consumer &&
       consumer.role === "consumer" &&
       isValidCi(cedula) &&
-      Number.isFinite(redeemAmount) &&
-      redeemAmount > 0
+      !Number.isNaN(redeemAmountNum) &&
+      redeemAmountNum > 0
     );
-  }, [consumer, cedula, redeemAmount]);
+  }, [consumer, cedula, redeemAmountNum]);
 
   const balanceGlobal = lookup?.balance ?? 0;
   const availableInThisCafe = lookup?.availableInThisCafe ?? 0;
-  const redeemErrorGlobal = redeemAmount > balanceGlobal;
-  const redeemErrorInCafe = redeemAmount > availableInThisCafe;
-  const redeemBlocked = redeemErrorGlobal || redeemErrorInCafe;
-  const redeemErrorMsg = redeemErrorGlobal
-    ? "Saldo insuficiente (global)"
-    : redeemErrorInCafe
-      ? "Saldo insuficiente en esta cafetería"
-      : null;
+  const redeemBlocked = !Number.isNaN(redeemAmountNum) && redeemAmountNum > balanceGlobal;
+  const redeemErrorMsg = redeemBlocked ? "Saldo insuficiente" : null;
 
   async function onLookup() {
     setStatus(null);
@@ -169,9 +170,17 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
     setLoadingLookup(true);
 
     try {
-      const res = await ownerGetConsumerSummary({ cedula: cedula.trim() });
+      const res = await ownerGetConsumerSummary({ cedula: cedula.trim(), debug: debugMode });
 
       setLastSummary(res);
+      if (res && typeof res === "object" && "cross_cafe_redeem" in res && typeof (res as { cross_cafe_redeem?: boolean }).cross_cafe_redeem === "boolean") {
+        setCrossCafeEnabled((res as { cross_cafe_redeem: boolean }).cross_cafe_redeem);
+      }
+      if (res && typeof res === "object" && "debug" in res && (res as { debug?: unknown }).debug != null) {
+        setLastSummaryDebug((res as { debug: unknown }).debug);
+      } else {
+        setLastSummaryDebug(null);
+      }
 
       setLookup({
         profile: res.profile ?? null,
@@ -193,18 +202,20 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
   async function onAssign(e: React.FormEvent) {
     e.preventDefault();
     setStatus(null);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setStatus("Ingresá un valor mayor a 0");
+    const amountVal = parseInt(amount, 10);
+    if (!amountVal || amountVal <= 0) {
+      setStatus("Ingresá una cantidad válida");
       return;
     }
     setLoadingAssign(true);
     try {
       await ownerAddCafecitos({
         cedula: cedula.trim(),
-        amount: Number(amount),
+        amount: amountVal,
         note: note?.trim() || "Carga manual",
       });
       setStatus("✅ Cafecitos asignados");
+      setAmount("");
       await onLookup();
     } catch (e: unknown) {
       setStatus(e instanceof Error ? e.message : "Error asignando cafecitos");
@@ -215,28 +226,32 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
 
   async function onRedeem(e: React.FormEvent) {
     e.preventDefault();
-    if (!Number.isFinite(redeemAmount) || redeemAmount <= 0) {
-      setStatus("Ingresá un valor mayor a 0");
+    const amountVal = parseInt(redeemAmount, 10);
+    if (!amountVal || amountVal <= 0) {
+      setStatus("Ingresá una cantidad válida");
       return;
     }
     if (redeemBlocked) return;
     setStatus(null);
     setRedeemResult(null);
     setLoadingRedeem(true);
+    setLastRedeemDebug(null);
     try {
       const result = await ownerRedeemCafecitos({
         cedula: cedula.trim(),
-        amount: Number(redeemAmount),
+        amount: amountVal,
         note: redeemNote?.trim() || undefined,
+        debug: debugMode,
       });
+      if (result.debug != null) setLastRedeemDebug(result.debug);
       if (result.ok) {
         setRedeemSuccess({
           name: lookup?.profile?.full_name ?? "Cliente",
-          amount: redeemAmount,
-          remaining: (lookup?.balance ?? 0) - redeemAmount,
+          amount: amountVal,
+          remaining: (lookup?.balance ?? 0) - amountVal,
         });
         setStatus("");
-        setRedeemAmount(0);
+        setRedeemAmount("");
         setRedeemNote("");
         await onLookup();
       } else {
@@ -255,7 +270,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
     setLookup(null);
     setLastSummary(null);
     setStatus(null);
-    setRedeemAmount(0);
+    setRedeemAmount("");
     setRedeemNote("Canje");
     cedulaInputRef.current?.focus();
   }
@@ -795,8 +810,13 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
 
             try {
               setLoadingLookup(true);
-              const res = await ownerGetConsumerSummary({ cedula: cedula.trim() });
+              const res = await ownerGetConsumerSummary({ cedula: cedula.trim(), debug: debugMode });
               const r = res as Json;
+              if (r && typeof r === "object" && "debug" in r && (r as { debug?: unknown }).debug != null) {
+                setLastSummaryDebug((r as { debug: unknown }).debug);
+              } else {
+                setLastSummaryDebug(null);
+              }
               setLookup({
                 profile: r.profile as LookupState["profile"],
                 balance: r.balance as number | undefined,
@@ -806,6 +826,9 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
                 last: r.last as LookupState["last"],
               });
 
+              if (typeof r === "object" && r !== null && "cross_cafe_redeem" in r && typeof (r as { cross_cafe_redeem?: boolean }).cross_cafe_redeem === "boolean") {
+                setCrossCafeEnabled((r as { cross_cafe_redeem: boolean }).cross_cafe_redeem);
+              }
               if (r?.error) setStatus(String(r.error));
               else setStatus("✅ Cliente cargado");
             } catch (e: unknown) {
@@ -820,7 +843,11 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
           {loadingLookup ? "Buscando…" : "Buscar"}
         </button>
 
-        {status ? <p className="mt-2 text-sm text-red-600">{status}</p> : null}
+        {status ? (
+          <p className="mt-2 text-sm text-red-600">
+            {crossCafeEnabled && status.includes("en esta cafetería") ? "Saldo insuficiente" : status}
+          </p>
+        ) : null}
 
         {redeemSuccess && (
           <div className="border rounded-lg p-6 bg-green-50 mb-4">
@@ -873,18 +900,27 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
 
               <div className="grid grid-cols-2 gap-4 mt-4">
                 <div>
-                  <div className="text-xs text-white/60">Saldo actual</div>
+                  <div className="text-xs text-white/60">{crossCafeEnabled ? "Saldo total" : "Saldo actual"}</div>
                   <div className="text-2xl font-semibold text-white">
                     {lookup?.balance ?? 0}
                   </div>
                 </div>
 
-                <div>
-                  <div className="text-xs text-white/60">Generados en mi cafetería</div>
-                  <div className="text-2xl font-semibold text-white">
-                    {lookup?.availableInThisCafe ?? 0}
+                {crossCafeEnabled ? (
+                  <div>
+                    <div className="text-xs text-white/60">Generados en mi cafetería</div>
+                    <div className="text-2xl font-semibold text-white">
+                      {lookup?.earnedInThisCafe ?? 0}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div>
+                    <div className="text-xs text-white/60">Disponible en esta cafetería</div>
+                    <div className="text-2xl font-semibold text-white">
+                      {lookup?.availableInThisCafe ?? 0}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <div className="text-xs text-white/60">Canjeado en mi cafetería</div>
@@ -894,6 +930,80 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
                 </div>
               </div>
             </div>
+
+            {debugMode && (
+              <div className="mt-4 rounded-xl border border-neutral-300 bg-neutral-100 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setOpenDebugSaldoPanel((v) => !v)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-left text-sm font-medium text-neutral-800"
+                >
+                  <span>DEBUG Saldo (temporal)</span>
+                  <span>{openDebugSaldoPanel ? "▾" : "▸"}</span>
+                </button>
+                {openDebugSaldoPanel && (
+                  <div className="p-3 border-t border-neutral-300 bg-white text-xs font-mono overflow-x-auto max-h-96 overflow-y-auto space-y-2">
+                    <p><b>crossCafeEnabled:</b> {String(crossCafeEnabled)}</p>
+                    {lastSummaryDebug ? (
+                      <>
+                        {(() => {
+                          const d = lastSummaryDebug as Record<string, unknown>;
+                          const shown = d.shown as Record<string, unknown> | undefined;
+                          const sources = d.sources as Record<string, unknown> | undefined;
+                          const diff = d.diff as Record<string, unknown> | undefined;
+                          const global = sources?.fromTransactionsGlobal as Record<string, unknown> | undefined;
+                          const cafe = sources?.fromTransactionsThisCafe as Record<string, unknown> | undefined;
+                          return (
+                            <>
+                              {shown && (
+                                <p><b>shown:</b> currentBalance={String(shown.currentBalance)} generatedInCafe={String(shown.generatedInCafe)} redeemedInCafe={String(shown.redeemedInCafe)}</p>
+                              )}
+                              {global && (
+                                <p><b>sources.fromTransactionsGlobal:</b> balance={String(global.balance)} txCount={String(global.txCount)} nullCafeIdCount={String(global.nullCafeIdCount)}</p>
+                              )}
+                              {cafe && (
+                                <p><b>sources.fromTransactionsThisCafe:</b> balance={String(cafe.balance)} txCount={String(cafe.txCount)} nullCafeIdCount={String(cafe.nullCafeIdCount)}</p>
+                              )}
+                              {sources?.fromProfileColumn && (
+                                <p><b>sources.fromProfileColumn:</b> {JSON.stringify(sources.fromProfileColumn)}</p>
+                              )}
+                              {diff && (
+                                <p><b>diff:</b> shownMinusGlobalTxBalance={String(diff.shownMinusGlobalTxBalance)} shownMinusCafeTxBalance={String(diff.shownMinusCafeTxBalance)}</p>
+                              )}
+                              {global?.last5 && (
+                                <div><b>global.last5:</b><pre className="mt-1 whitespace-pre-wrap">{JSON.stringify(global.last5, null, 2)}</pre></div>
+                              )}
+                              {cafe?.last5 && (
+                                <div><b>cafe.last5:</b><pre className="mt-1 whitespace-pre-wrap">{JSON.stringify(cafe.last5, null, 2)}</pre></div>
+                              )}
+                              {shown && global && (Number(shown.currentBalance) !== Number(global.balance)) && (
+                                <div className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-900 mt-2">
+                                  El saldo mostrado NO viene de point_transactions global. Hay otra fuente (columna balance o summary/cache).
+                                </div>
+                              )}
+                              {global && Number(global.nullCafeIdCount) > 0 && (
+                                <div className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-900 mt-2">
+                                  Hay tx con cafe_id NULL. Si el sistema antes sumaba global sin cafe_id, el saldo por cafetería dará 0.
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                        <button
+                          type="button"
+                          onClick={() => navigator.clipboard.writeText(JSON.stringify(lastSummaryDebug, null, 2))}
+                          className="mt-2 rounded px-2 py-1 bg-neutral-200 hover:bg-neutral-300 text-neutral-800"
+                        >
+                          Copiar debug saldo
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-neutral-500">Buscá un cliente para ver el debug de saldo aquí.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ---- Últimos movimientos (solo MI cafetería) ---- */}
             <div className="border rounded-lg bg-white overflow-hidden mt-4">
@@ -956,7 +1066,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
           </div>
         )}
 
-        {debug && lastSummary && (
+        {debugMode && lastSummary && (
           <div style={{ marginTop: 16, padding: 12, border: "1px solid #ccc", borderRadius: 8, background: "#fafafa" }}>
             <div style={{ fontWeight: 700, marginBottom: 8 }}>DEBUG</div>
             <pre style={{ fontSize: 12, overflow: "auto" }}>{JSON.stringify(lastSummary, null, 2)}</pre>
@@ -988,9 +1098,11 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
                     <input
                       type="number"
                       min={1}
+                      inputMode="numeric"
+                      placeholder="Cantidad"
                       className="w-full border rounded-lg px-3 py-2"
                       value={amount}
-                      onChange={(e) => setAmount(Number(e.target.value))}
+                      onChange={(e) => setAmount(e.target.value)}
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -1029,7 +1141,9 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
             <p className="text-sm text-neutral-700">Cliente: {redeemResult.name} (CI {redeemResult.cedula})</p>
             <p className="text-sm text-neutral-700">Se canjearon: <strong>{redeemResult.redeemed}</strong></p>
             <p className="text-2xl font-semibold text-neutral-900">Saldo total restante: {redeemResult.balanceAfter}</p>
-            <p className="text-sm text-neutral-700">Disponible en esta cafetería: {redeemResult.availableInThisCafeAfter}</p>
+            {!crossCafeEnabled && (
+              <p className="text-sm text-neutral-700">Disponible en esta cafetería: {redeemResult.availableInThisCafeAfter}</p>
+            )}
             <button
               type="button"
               onClick={onFinishRedeem}
@@ -1057,7 +1171,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
                 <form onSubmit={onRedeem} className="space-y-3">
                   {consumer && redeemErrorMsg && (
                     <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
-                      {redeemErrorMsg}
+                      {crossCafeEnabled && redeemErrorMsg.includes("en esta cafetería") ? "Saldo insuficiente" : redeemErrorMsg}
                     </div>
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1066,9 +1180,11 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
                       <input
                         type="number"
                         min={1}
+                        inputMode="numeric"
+                        placeholder="Cantidad"
                         className="w-full border rounded-lg px-3 py-2"
                         value={redeemAmount}
-                        onChange={(e) => setRedeemAmount(Number(e.target.value))}
+                        onChange={(e) => setRedeemAmount(e.target.value)}
                       />
                     </div>
                     <div className="md:col-span-2">
@@ -1088,7 +1204,77 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
                   >
                     {loadingRedeem ? "Canjeando..." : "Canjear"}
                   </button>
+                  {crossCafeEnabled && (
+                    <p className="text-sm text-neutral-500 mt-1">
+                      Canje cruzado activo: el saldo es global (podés canjear en cualquier cafetería).
+                    </p>
+                  )}
                 </form>
+
+                {debugMode && (
+                  <div className="mt-4 rounded-xl border border-neutral-300 bg-neutral-100 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setOpenDebugPanel((v) => !v)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-left text-sm font-medium text-neutral-800"
+                    >
+                      <span>DEBUG Canje (temporal)</span>
+                      <span>{openDebugPanel ? "▾" : "▸"}</span>
+                    </button>
+                    {openDebugPanel && (
+                      <div className="p-3 border-t border-neutral-300 bg-white text-xs font-mono overflow-x-auto max-h-80 overflow-y-auto space-y-2">
+                        <p><b>crossCafeEnabled:</b> {String(crossCafeEnabled)}</p>
+                        {lastRedeemDebug ? (
+                          <>
+                            {(() => {
+                              const d = lastRedeemDebug as Record<string, unknown>;
+                              return (
+                                <>
+                                  <p><b>consumerId:</b> {String(d.consumerId ?? "—")}</p>
+                                  <p><b>cafeId:</b> {String(d.cafeId ?? "—")}</p>
+                                  <p><b>usedBalance:</b> {String(d.usedBalance ?? "—")} · <b>requestedAmount:</b> {String(d.requestedAmount ?? "—")}</p>
+                                  {(d.cafeMeta as Record<string, unknown>) && (
+                                    <p><b>cafeMeta:</b> txCount={(d.cafeMeta as Record<string, unknown>).txCount} nullCafeIdCount={(d.cafeMeta as Record<string, unknown>).nullCafeIdCount}</p>
+                                  )}
+                                  {(d.globalMeta as Record<string, unknown>) && (
+                                    <p><b>globalMeta:</b> txCount={(d.globalMeta as Record<string, unknown>).txCount} nullCafeIdCount={(d.globalMeta as Record<string, unknown>).nullCafeIdCount}</p>
+                                  )}
+                                  {(d.cafeMeta as Record<string, unknown>)?.typesCount && (
+                                    <p><b>cafeMeta.typesCount:</b> {JSON.stringify((d.cafeMeta as Record<string, unknown>).typesCount)}</p>
+                                  )}
+                                  {(d.globalMeta as Record<string, unknown>)?.typesCount && (
+                                    <p><b>globalMeta.typesCount:</b> {JSON.stringify((d.globalMeta as Record<string, unknown>).typesCount)}</p>
+                                  )}
+                                  {(d.cafeMeta as Record<string, unknown>)?.last5 && (
+                                    <div><b>cafeMeta.last5:</b>
+                                      <pre className="mt-1 whitespace-pre-wrap">{JSON.stringify((d.cafeMeta as Record<string, unknown>).last5, null, 2)}</pre>
+                                    </div>
+                                  )}
+                                  {(d.globalMeta as Record<string, unknown>)?.last5 && (
+                                    <div><b>globalMeta.last5:</b>
+                                      <pre className="mt-1 whitespace-pre-wrap">{JSON.stringify((d.globalMeta as Record<string, unknown>).last5, null, 2)}</pre>
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(JSON.stringify(lastRedeemDebug, null, 2));
+                              }}
+                              className="mt-2 rounded px-2 py-1 bg-neutral-200 hover:bg-neutral-300 text-neutral-800"
+                            >
+                              Copiar debug canje
+                            </button>
+                          </>
+                        ) : (
+                          <p className="text-neutral-500">Canjeá una vez para ver el debug aquí.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </section>

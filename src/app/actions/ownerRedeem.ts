@@ -61,6 +61,23 @@ function computeBalance(profileId: string, txs: Tx[]) {
   return balance;
 }
 
+/** Saldo global del consumidor (todas las point_transactions del perfil, sin filtrar por cafe_id). */
+async function getGlobalBalance(
+  supabase: ReturnType<typeof supabaseAdmin>,
+  profileId: string
+): Promise<number> {
+  const { data: txs, error } = await supabase
+    .from("point_transactions")
+    .select("id, tx_type, from_profile_id, to_profile_id, amount")
+    .or(`from_profile_id.eq.${profileId},to_profile_id.eq.${profileId}`)
+    .order("created_at", { ascending: false })
+    .limit(2000);
+
+  if (error) return 0;
+  const typed = (txs ?? []) as Tx[];
+  return computeBalance(profileId, typed);
+}
+
 export type OwnerRedeemResult = { ok: true } | { ok: false; error: string };
 
 export async function ownerRedeemCafecitos(
@@ -76,21 +93,16 @@ export async function ownerRedeemCafecitos(
   const cafeId = session.cafeId ?? null;
   if (!cafeId) return { ok: false, error: "Sin cafetería asignada" };
 
-  let canRedeem: boolean;
   let actorOwnerProfileId: string | null = null;
-  let actorStaffId: string | null = null;
 
   if (session.role === "owner") {
     const { getOwnerContext } = await import("@/app/actions/ownerContext");
     const ctx = await getOwnerContext();
     if (!ctx) return { ok: false, error: "Sin cafetería asignada" };
     if (!ctx.capabilities.canRedeem) return { ok: false, error: "No tenés permiso para cobrar/canjear cafecitos" };
-    canRedeem = true;
     actorOwnerProfileId = session.profileId ?? null;
   } else if (session.role === "staff") {
-    canRedeem = session.can_redeem === true;
-    actorStaffId = session.staffId ?? null;
-    if (!canRedeem) return { ok: false, error: "No tenés permiso para cobrar/canjear cafecitos" };
+    if (session.can_redeem !== true) return { ok: false, error: "No tenés permiso para cobrar/canjear cafecitos" };
   } else {
     return { ok: false, error: "Solo dueño o staff pueden canjear" };
   }
@@ -122,28 +134,16 @@ export async function ownerRedeemCafecitos(
   }
 
   const consumerId = profile.id;
-
-  const { data: txs, error: tErr } = await supabase
-    .from("point_transactions")
-    .select("id, tx_type, from_profile_id, to_profile_id, amount")
-    .or(`from_profile_id.eq.${consumerId},to_profile_id.eq.${consumerId}`)
-    .order("created_at", { ascending: false })
-    .limit(500);
-
-  if (tErr) return { ok: false, error: "Error al consultar saldo" };
-
-  const typed = (txs ?? []) as Tx[];
-  const balance = computeBalance(consumerId, typed);
+  const balance = await getGlobalBalance(supabase, consumerId);
 
   if (balance < parsed.data.amount) {
-    return { ok: false, error: `Saldo insuficiente (tiene ${balance})` };
+    return { ok: false, error: "Saldo insuficiente" };
   }
 
   const { error: insertErr } = await supabase.from("point_transactions").insert({
     tx_type: "redeem",
     cafe_id: cafeId,
     actor_owner_profile_id: actorOwnerProfileId,
-    actor_staff_id: actorStaffId,
     from_profile_id: consumerId,
     to_profile_id: null,
     amount: parsed.data.amount,

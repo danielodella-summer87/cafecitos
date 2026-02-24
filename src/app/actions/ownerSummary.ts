@@ -20,72 +20,133 @@ type Tx = {
   created_at: string;
 };
 
+type BalanceMeta = {
+  balance: number;
+  txCount: number;
+  nullCafeIdCount: number;
+  typesCount: Record<string, number>;
+  last5: Array<{ type: string; amount: number; cafe_id: string | null; created_at: string | null }>;
+};
+
 function normalizeCedula(input: unknown) {
   return String(input ?? "").trim().replace(/\D/g, "");
 }
 
-function normalizeInput(input: unknown): { cedula: string } {
-  // Si viene de un <form action={...}> llega como FormData
+function normalizeInput(input: unknown): { cedula: string; debug?: boolean } {
   if (typeof FormData !== "undefined" && input instanceof FormData) {
     return { cedula: normalizeCedula(input.get("cedula")) };
   }
-
-  // Si viene como objeto { cedula }
   if (input && typeof input === "object" && "cedula" in (input as Record<string, unknown>)) {
-    const o = input as { cedula?: unknown };
-    return { cedula: normalizeCedula(o.cedula) };
+    const o = input as { cedula?: unknown; debug?: unknown };
+    return {
+      cedula: normalizeCedula(o.cedula),
+      debug: o.debug === true,
+    };
   }
-
-  // Fallback
   return { cedula: normalizeCedula(undefined) };
+}
+
+function getDebugFlag(input: unknown): boolean {
+  if (input && typeof input === "object" && "debug" in (input as Record<string, unknown>)) {
+    return (input as { debug?: boolean }).debug === true;
+  }
+  return false;
 }
 
 function computeBalance(profileId: string, txs: Tx[]) {
   let balance = 0;
-
   for (const t of txs) {
     const toId = t.to_profile_id ?? null;
     const fromId = t.from_profile_id ?? null;
-
     switch (t.tx_type) {
       case "earn":
       case "adjust":
       case "transfer_in":
         if (toId === profileId) balance += Number(t.amount ?? 0);
         break;
-
       case "redeem":
       case "transfer_out":
         if (fromId === profileId) balance -= Number(t.amount ?? 0);
         break;
     }
   }
-
   return balance;
 }
 
-function computeEarnedInCafe(profileId: string, cafeId: string, txs: Tx[]) {
-  // “Generado en mi cafetería”: todo lo que SUMA al socio en ESTE café.
-  // (earn + adjust + transfer_in) filtrado por cafe_id y to_profile_id.
-  let total = 0;
+function buildBalanceMeta(profileId: string, txs: Tx[]): BalanceMeta {
+  const balance = computeBalance(profileId, txs);
+  let nullCafeIdCount = 0;
+  const typesCount: Record<string, number> = {};
+  for (const t of txs) {
+    if (t.cafe_id == null) nullCafeIdCount++;
+    const k = t.tx_type ?? "unknown";
+    typesCount[k] = (typesCount[k] ?? 0) + 1;
+  }
+  const last5 = txs.slice(0, 5).map((t) => ({
+    type: t.tx_type,
+    amount: Number(t.amount ?? 0),
+    cafe_id: t.cafe_id ?? null,
+    created_at: t.created_at ?? null,
+  }));
+  return { balance, txCount: txs.length, nullCafeIdCount, typesCount, last5 };
+}
 
+async function getGlobalBalanceWithMeta(
+  supabase: ReturnType<typeof supabaseAdmin>,
+  profileId: string
+): Promise<BalanceMeta> {
+  try {
+    const { data: txs, error } = await supabase
+      .from("point_transactions")
+      .select("id, tx_type, from_profile_id, to_profile_id, amount, cafe_id, created_at")
+      .or(`from_profile_id.eq.${profileId},to_profile_id.eq.${profileId}`)
+      .order("created_at", { ascending: false })
+      .limit(2000);
+    if (error) return { balance: 0, txCount: 0, nullCafeIdCount: 0, typesCount: {}, last5: [] };
+    return buildBalanceMeta(profileId, (txs ?? []) as Tx[]);
+  } catch {
+    return { balance: 0, txCount: 0, nullCafeIdCount: 0, typesCount: {}, last5: [] };
+  }
+}
+
+async function getCafeBalanceWithMeta(
+  supabase: ReturnType<typeof supabaseAdmin>,
+  profileId: string,
+  cafeId: string
+): Promise<BalanceMeta> {
+  try {
+    const { data: txs, error } = await supabase
+      .from("point_transactions")
+      .select("id, tx_type, from_profile_id, to_profile_id, amount, cafe_id, created_at")
+      .eq("cafe_id", cafeId)
+      .or(`from_profile_id.eq.${profileId},to_profile_id.eq.${profileId}`)
+      .order("created_at", { ascending: false })
+      .limit(1000);
+    if (error) return { balance: 0, txCount: 0, nullCafeIdCount: 0, typesCount: {}, last5: [] };
+    return buildBalanceMeta(profileId, (txs ?? []) as Tx[]);
+  } catch {
+    return { balance: 0, txCount: 0, nullCafeIdCount: 0, typesCount: {}, last5: [] };
+  }
+}
+
+function computeEarnedInCafe(profileId: string, cafeId: string, txs: Tx[]) {
+  let total = 0;
   for (const t of txs) {
     const isInCafe = t.cafe_id === cafeId;
     const isToMe = t.to_profile_id === profileId;
-
     if (!isInCafe || !isToMe) continue;
-
     if (t.tx_type === "earn" || t.tx_type === "adjust" || t.tx_type === "transfer_in") {
       total += t.amount;
     }
   }
-
   return total;
 }
 
 export async function ownerGetConsumerSummary(input: unknown) {
-  const parsed = schema.parse(normalizeInput(input));
+  const normalized = normalizeInput(input);
+  const parsed = schema.parse({ cedula: normalized.cedula });
   const cedula = parsed.cedula;
+  const wantDebug = getDebugFlag(input) === true;
 
   const session = await getSession();
   if (!session) throw new Error("No autenticado");
@@ -93,6 +154,17 @@ export async function ownerGetConsumerSummary(input: unknown) {
 
   const cafeId = session.cafeId ?? null;
   if (!cafeId) throw new Error("Sin cafetería asignada (cafe_id).");
+
+  const supabase = supabaseAdmin();
+  let crossCafeRedeem = true;
+  const { data: settingsRow } = await supabase
+    .from("settings_global")
+    .select("allow_cross_cafe_redeem")
+    .eq("id", true)
+    .maybeSingle();
+  if (settingsRow && typeof (settingsRow as { allow_cross_cafe_redeem?: unknown }).allow_cross_cafe_redeem === "boolean") {
+    crossCafeRedeem = (settingsRow as { allow_cross_cafe_redeem: boolean }).allow_cross_cafe_redeem;
+  }
 
   let canIssue = false;
   let canRedeem = false;
@@ -108,9 +180,6 @@ export async function ownerGetConsumerSummary(input: unknown) {
   }
   if (!canIssue && !canRedeem) throw new Error("No tenés permiso para atender clientes");
 
-  const supabase = supabaseAdmin();
-
-  // 2) buscar consumidor
   const { data: profile, error: pErr } = await supabase
     .from("profiles")
     .select("id, full_name, cedula, role, created_at, phone")
@@ -128,6 +197,8 @@ export async function ownerGetConsumerSummary(input: unknown) {
       availableInThisCafe: 0,
       last: [],
       error: "No existe un usuario con esa cédula",
+      cross_cafe_redeem: crossCafeRedeem,
+      ...(wantDebug && { debug: null }),
     };
   }
 
@@ -140,10 +211,11 @@ export async function ownerGetConsumerSummary(input: unknown) {
       availableInThisCafe: 0,
       last: [],
       error: "La cédula existe, pero NO es consumer",
+      cross_cafe_redeem: crossCafeRedeem,
+      ...(wantDebug && { debug: null }),
     };
   }
 
-  // 3) transacciones globales del consumidor (solo para saldo; sin filtrar por café)
   const { data: txs, error: tErr } = await supabase
     .from("point_transactions")
     .select("id, tx_type, actor_owner_profile_id, from_profile_id, to_profile_id, cafe_id, amount, note, created_at")
@@ -156,7 +228,6 @@ export async function ownerGetConsumerSummary(input: unknown) {
   const typed = (txs ?? []) as Tx[];
   const balance = computeBalance(profile.id, typed);
 
-  // 4) Query con .eq("cafe_id", cafeId): últimos movimientos / generado / canjeado en MI cafetería
   const { data: txsMyCafe, error: cafeErr } = await supabase
     .from("point_transactions")
     .select("id, tx_type, from_profile_id, to_profile_id, cafe_id, amount, note, created_at")
@@ -170,18 +241,50 @@ export async function ownerGetConsumerSummary(input: unknown) {
   const typedMyCafe = (txsMyCafe ?? []) as Tx[];
 
   const earnedInThisCafe = computeEarnedInCafe(profile.id, cafeId, typedMyCafe);
-
   const lastInMyCafe = typedMyCafe.slice(0, 10);
-
   const redeemedInThisCafe = typedMyCafe
     .filter((t) => t.tx_type === "redeem" && t.from_profile_id === profile.id)
     .reduce((sum, t) => sum + (t.amount ?? 0), 0);
-
   const redeemedTotalGlobal = typed
     .filter((t) => t.tx_type === "redeem" && t.from_profile_id === profile.id)
     .reduce((sum, t) => sum + (t.amount ?? 0), 0);
-
   const availableInThisCafe = (earnedInThisCafe ?? 0) - (redeemedInThisCafe ?? 0);
+
+  let debug: unknown = undefined;
+  if (wantDebug) {
+    const [fromTransactionsGlobal, fromTransactionsThisCafe, profileBalanceRow] = await Promise.all([
+      getGlobalBalanceWithMeta(supabase, profile.id),
+      getCafeBalanceWithMeta(supabase, profile.id, cafeId),
+      supabase.from("profiles").select("balance").eq("id", profile.id).maybeSingle(),
+    ]);
+
+    const fromProfileColumn =
+      profileBalanceRow.error != null
+        ? { hasBalanceColumn: false as const }
+        : { hasBalanceColumn: true as const, value: (profileBalanceRow.data as { balance?: number } | null)?.balance };
+
+    const cafeBalance = fromTransactionsThisCafe.balance;
+    debug = {
+      now: new Date().toISOString(),
+      profileId: profile.id,
+      cafeIdUsedByOwnerPanel: cafeId,
+      shown: {
+        currentBalance: balance,
+        generatedInCafe: earnedInThisCafe,
+        redeemedInCafe: redeemedInThisCafe,
+      },
+      sources: {
+        fromTransactionsGlobal,
+        fromTransactionsThisCafe,
+        fromProfileColumn,
+        fromAnySummaryTable: null as { table?: string; value?: unknown } | null,
+      },
+      diff: {
+        shownMinusGlobalTxBalance: balance - fromTransactionsGlobal.balance,
+        shownMinusCafeTxBalance: cafeId ? balance - cafeBalance : null,
+      },
+    };
+  }
 
   return {
     profile,
@@ -192,5 +295,7 @@ export async function ownerGetConsumerSummary(input: unknown) {
     last: lastInMyCafe,
     redeemedTotalGlobal,
     error: null,
+    cross_cafe_redeem: crossCafeRedeem,
+    ...(debug !== undefined && { debug }),
   };
 }
