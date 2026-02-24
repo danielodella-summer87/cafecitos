@@ -58,7 +58,7 @@ export function PromoCard({
           </CardSubtitle>
         </div>
 
-        {/* Cafeterías colapsadas (sin chips visibles cerrado); z-50 para que no lo recorte el padre */
+        {/* Cafeterías colapsadas (sin chips visibles cerrado); z-50 para que no lo recorte el padre */}
         <div className="mt-3 relative z-50">
           <details className="rounded-xl border border-[rgba(15,23,42,0.15)] bg-white/40 px-3 py-2 group">
             <summary className="cursor-pointer list-none select-none flex items-center justify-between gap-3">
