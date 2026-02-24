@@ -1,5 +1,6 @@
 "use server";
 
+import { resolvePromoImage } from "@/lib/resolvePromoImage";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
 import { getCurrentUserTierSlug } from "@/app/actions/coffeeGuides";
@@ -187,7 +188,7 @@ export async function getConsumerPromos(): Promise<ConsumerPromoItem[]> {
 
   const { data: promos, error: ePromos } = await supabase
     .from("promotions")
-    .select("id, title, description, image_url, scope, starts_at, ends_at")
+    .select("id, title, description, image_path, image_url, scope, starts_at, ends_at")
     .eq("is_active", true);
   if (ePromos || !promos?.length) return [];
 
@@ -197,6 +198,7 @@ export async function getConsumerPromos(): Promise<ConsumerPromoItem[]> {
       id: string;
       title?: string;
       description?: string | null;
+      image_path?: string | null;
       image_url?: string | null;
       scope?: string;
       starts_at?: string | null;
@@ -220,7 +222,6 @@ export async function getConsumerPromos(): Promise<ConsumerPromoItem[]> {
   const globalCafeNames = Object.values(allCafeNames).filter((n) => n !== "(sin nombre)");
 
   const result: ConsumerPromoItem[] = [];
-  const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1509042239860-f550ce710b93";
 
   for (const p of activePromos) {
     let cafes: string[] = [];
@@ -236,7 +237,7 @@ export async function getConsumerPromos(): Promise<ConsumerPromoItem[]> {
     }
     result.push({
       id: p.id,
-      image: (p.image_url ?? "").trim() || DEFAULT_IMAGE,
+      image: resolvePromoImage(p),
       title: (p.title ?? "").trim() || "Promo",
       description: (p.description ?? "").trim() || "",
       cafes,

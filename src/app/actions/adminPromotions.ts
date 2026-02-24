@@ -25,7 +25,7 @@ const createSchema = z
     title: z.string().min(2, "Título al menos 2 caracteres"),
     subtitle: z.string().optional().nullable(),
     description: z.string().optional().nullable(),
-    image_url: z.string().optional().nullable(),
+    image_path: z.string().optional().nullable(),
     scope: scopeEnum.default("specific"),
     cafe_ids: z.array(z.string().uuid()).default([]),
     start_at: z.string().optional().nullable().or(z.literal("")),
@@ -60,7 +60,7 @@ export type PromotionRow = {
   title: string;
   subtitle: string | null;
   description: string | null;
-  image_url: string | null;
+  image_path: string | null;
   is_active: boolean;
   scope: string;
   start_at: string | null;
@@ -76,7 +76,7 @@ export async function getPromotionsForAdmin(): Promise<PromotionRow[]> {
 
   const { data: promos, error: e1 } = await sb
     .from("promotions")
-    .select("id, title, subtitle, description, image_url, is_active, scope, starts_at, ends_at, created_at")
+    .select("id, title, subtitle, description, image_path, is_active, scope, starts_at, ends_at, created_at")
     .order("created_at", { ascending: false });
 
   if (e1) return [];
@@ -85,7 +85,7 @@ export async function getPromotionsForAdmin(): Promise<PromotionRow[]> {
     title: string;
     subtitle?: string | null;
     description?: string | null;
-    image_url?: string | null;
+    image_path?: string | null;
     is_active?: boolean;
     scope?: string;
     starts_at?: string | null;
@@ -110,7 +110,7 @@ export async function getPromotionsForAdmin(): Promise<PromotionRow[]> {
       title: p.title ?? "",
       subtitle: p.subtitle ?? null,
       description: p.description ?? null,
-      image_url: p.image_url ?? null,
+      image_path: p.image_path ?? null,
       is_active: p.is_active ?? true,
       scope: p.scope ?? "specific",
       start_at: p.starts_at ?? null,
@@ -148,7 +148,7 @@ export async function createPromotion(
         title: parsed.data.title.trim(),
         subtitle: parsed.data.subtitle?.trim() || null,
         description: parsed.data.description?.trim() || null,
-        image_url: parsed.data.image_url?.trim() || null,
+        image_path: parsed.data.image_path?.trim() || null,
         scope: parsed.data.scope,
         is_active: true,
         starts_at: parsed.data.start_at && String(parsed.data.start_at).trim() ? parsed.data.start_at : null,
@@ -205,7 +205,7 @@ export async function updatePromotion(
         title: parsed.data.title.trim(),
         subtitle: parsed.data.subtitle?.trim() || null,
         description: parsed.data.description?.trim() || null,
-        image_url: parsed.data.image_url?.trim() || null,
+        image_path: parsed.data.image_path?.trim() || null,
         scope: parsed.data.scope,
         starts_at: parsed.data.start_at && String(parsed.data.start_at).trim() ? parsed.data.start_at : null,
         ends_at: parsed.data.end_at && String(parsed.data.end_at).trim() ? parsed.data.end_at : null,

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { SHOW_MEDIA_DEBUG } from "@/lib/mediaDebug";
 import { Card, CardTitle, CardSubtitle, Button } from "./components";
 import CafeName from "./CafeName";
 
@@ -18,6 +19,7 @@ export function PromoCard({
   onDiscoverClick,
   onOpenCafe,
   fallbackImage = DEFAULT_COVER,
+  debugLabel,
 }: {
   title: string;
   description: React.ReactNode;
@@ -28,6 +30,8 @@ export function PromoCard({
   /** Al hacer click en una cafetería del listado "Te esperamos en …" */
   onOpenCafe?: (idOrName: string) => void;
   fallbackImage?: string;
+  /** Solo se muestra cuando NEXT_PUBLIC_MEDIA_DEBUG=1 */
+  debugLabel?: string;
 }) {
   const [imgSrc, setImgSrc] = useState(image);
   const list = (cafes ?? []).filter(Boolean);
@@ -46,6 +50,9 @@ export function PromoCard({
           sizes="(max-width: 640px) 85vw, (max-width: 1024px) 48vw, 24vw"
         />
       </div>
+      {SHOW_MEDIA_DEBUG && debugLabel != null && (
+        <div className="text-[10px] opacity-60 mt-1 break-all px-4">{debugLabel}</div>
+      )}
 
       {/* Body */}
       <div className="flex h-full flex-col px-4 py-4">
@@ -129,11 +136,14 @@ export function CafeCard({
   image,
   tag,
   fallbackImage = DEFAULT_COVER,
+  debugLabel,
 }: {
   cafe: CafeLike;
   image: string;
   tag?: string;
   fallbackImage?: string;
+  /** Solo se muestra cuando NEXT_PUBLIC_MEDIA_DEBUG=1 */
+  debugLabel?: string;
 }) {
   const [src, setSrc] = useState(image);
   const handleError = () => setSrc(fallbackImage);
@@ -149,7 +159,9 @@ export function CafeCard({
           onError={handleError}
         />
       </div>
-
+      {SHOW_MEDIA_DEBUG && debugLabel != null && (
+        <div className="text-[10px] opacity-60 mt-1 break-all">{debugLabel}</div>
+      )}
       <div className="p-4">
         <CardTitle>
           <CafeName cafe={cafe} />

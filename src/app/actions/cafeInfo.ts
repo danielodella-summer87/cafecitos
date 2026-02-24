@@ -3,6 +3,9 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
 
+const SHOW_MEDIA_DEBUG =
+  typeof process !== "undefined" && process.env.NEXT_PUBLIC_MEDIA_DEBUG === "1";
+
 export type CafeReviewItem = {
   id: string;
   rating: number;
@@ -18,13 +21,20 @@ export type CafePublicInfo = {
     address: string | null;
     hours_text: string | null;
     image_code: string | null;
+    image_path: string | null;
     is_active: boolean;
     lat: number | null;
     lng: number | null;
   };
   reviewsStats: { avg_rating: number; reviews_count: number } | null;
   reviews: CafeReviewItem[];
-  promos: Array<{ promo_id: string; title: string; description: string | null; image_code: string | null }>;
+  promos: Array<{
+    promo_id: string;
+    title: string;
+    description: string | null;
+    image_path: string | null;
+    image_url: string | null;
+  }>;
 };
 
 export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo | (CafePublicInfo & { debug?: unknown }) | { cafe: null; reviewsStats: null; reviews: never[]; promos: never[]; debug?: unknown }> {
@@ -35,13 +45,13 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
 
   const supabase = supabaseAdmin();
 
-  type CafeRow = { id: string; name: string | null; city: string | null; address: string | null; hours_text: string | null; image_code: string | null; is_active: boolean; lat?: number | null; lng?: number | null };
+  type CafeRow = { id: string; name: string | null; city: string | null; address: string | null; hours_text: string | null; image_code: string | null; image_path: string | null; is_active: boolean; lat?: number | null; lng?: number | null };
   let cafe: CafeRow | null = null;
   let supabaseError: { message?: string } | null = null;
 
   const { data: cafeWithCoords, error: errWithCoords } = await supabase
     .from("cafes")
-    .select("id, name, city, address, hours_text, image_code, is_active, lat, lng")
+    .select("id, name, city, address, hours_text, image_code, image_path, is_active, lat, lng")
     .eq("id", cafeId)
     .maybeSingle();
 
@@ -51,7 +61,7 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
     if (missingColumn) {
       const { data: cafeBase, error: errBase } = await supabase
         .from("cafes")
-        .select("id, name, city, address, hours_text, image_code, is_active")
+        .select("id, name, city, address, hours_text, image_code, image_path, is_active")
         .eq("id", cafeId)
         .maybeSingle();
       if (!errBase && cafeBase) {
@@ -127,15 +137,39 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
     // tabla puede no existir
   }
 
+  // Promos asignadas a esta cafetería desde promotions + promotion_cafes (NULL-safe en fechas)
   let promos: CafePublicInfo["promos"] = [];
   try {
-    const { data: promosData } = await supabase
-      .from("v_cafe_promos_active")
-      .select("promo_id, title, description, image_code")
+    const { data: links } = await supabase
+      .from("promotion_cafes")
+      .select("promotion_id")
       .eq("cafe_id", cafeId);
-    promos = (promosData ?? []) as CafePublicInfo["promos"];
-  } catch {
-    // vista puede no existir
+    const promotionIds = (links ?? []).map((r: { promotion_id: string }) => r.promotion_id);
+    if (promotionIds.length > 0) {
+      const { data: promosRows } = await supabase
+        .from("promotions")
+        .select("id, title, description, image_path, image_url, is_active, starts_at, ends_at")
+        .in("id", promotionIds);
+      const now = new Date().toISOString();
+      const active = (promosRows ?? []).filter((p: { is_active?: boolean; starts_at?: string | null; ends_at?: string | null }) => {
+        if (!p.is_active) return false;
+        if (p.starts_at && p.starts_at > now) return false;
+        if (p.ends_at && p.ends_at < now) return false;
+        return true;
+      });
+      promos = active.map((p: { id: string; title?: string; description?: string | null; image_path?: string | null; image_url?: string | null }) => ({
+        promo_id: p.id,
+        title: (p.title ?? "").trim() || "Promo",
+        description: (p.description ?? "").trim() || null,
+        image_path: p.image_path ?? null,
+        image_url: p.image_url ?? null,
+      }));
+      if (SHOW_MEDIA_DEBUG) {
+        console.log("[MEDIA_DEBUG] getCafePublicInfo promos", { cafeId, promotionIds, count: promos.length, promos: promos.map((x) => ({ id: x.promo_id, title: x.title, image_path: x.image_path, image_url: x.image_url })) });
+      }
+    }
+  } catch (e) {
+    if (SHOW_MEDIA_DEBUG) console.log("[MEDIA_DEBUG] getCafePublicInfo promos error", cafeId, e);
   }
 
   const cafePayload: CafePublicInfo["cafe"] = {
@@ -145,6 +179,7 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
     address: cafe.address ?? null,
     hours_text: cafe.hours_text ?? null,
     image_code: cafe.image_code ?? null,
+    image_path: cafe.image_path ?? null,
     is_active: cafe.is_active ?? true,
     lat: cafe.lat != null ? Number(cafe.lat) : null,
     lng: cafe.lng != null ? Number(cafe.lng) : null,

@@ -7,6 +7,8 @@ import { Container, Button, Card, CardTitle, Badge } from "@/app/ui/components";
 import CafeName from "@/app/ui/CafeName";
 import { getNextImageCode } from "@/app/actions/cafes";
 import type { CafeListItem } from "@/app/actions/cafes";
+import { resolveCafeImage } from "@/lib/resolveCafeImage";
+import { SHOW_MEDIA_DEBUG, getImageDebugLabel } from "@/lib/mediaDebug";
 import CafeForm from "./CafeForm";
 import CafeInfoModal from "@/app/app/consumer/CafeInfoModal";
 
@@ -21,10 +23,7 @@ function CafeListCard({
   onOpenInfo: (id: string) => void;
   onEdit: (id: string) => void;
 }) {
-  const code = (cafe.image_code ?? "").trim();
-  const imgPath = /^[0-9]{2}$/.test(code)
-    ? `/media/cafes/${code}.jpg`
-    : COVER_DEFAULT;
+  const imgPath = resolveCafeImage(cafe);
   const [src, setSrc] = useState(imgPath);
 
   useEffect(() => {
@@ -36,12 +35,17 @@ function CafeListCard({
       <div className="relative h-36 w-full bg-[#F1F5F9]">
         <Image
           src={src}
-          alt={`${(cafe.image_code ?? "").toString().padStart(2, "0")} - ${cafe.name}`}
+          alt={cafe.name ? `Foto ${cafe.name}` : "Cafetería"}
           fill
           className="object-cover"
           onError={() => setSrc(COVER_DEFAULT)}
         />
       </div>
+      {SHOW_MEDIA_DEBUG && (
+        <div className="text-[10px] opacity-60 mt-1 break-all px-4">
+          {getImageDebugLabel(src, COVER_DEFAULT)}
+        </div>
+      )}
       <div className="p-4">
         <CardTitle>
           <CafeName cafe={cafe} />

@@ -23,6 +23,8 @@ import {
 import { ownerGetConsumerSummary } from "@/app/actions/ownerSummary";
 import { AppMark } from "@/components/brand/AppMark";
 import { isValidCi } from "@/lib/ci";
+import { resolvePublicImage } from "@/lib/media";
+import { SHOW_MEDIA_DEBUG, getImageDebugLabel } from "@/lib/mediaDebug";
 import { getTxMeta } from "@/lib/ui/txLabels";
 import { PRO } from "@/lib/ui/pro";
 import OwnerStaffManager from "./OwnerStaffManager";
@@ -42,6 +44,7 @@ type CafeForClient = {
   id: string;
   name: string;
   image_code: string | null;
+  image_path?: string | null;
   city: string | null;
   address: string | null;
   phone: string | null;
@@ -647,11 +650,19 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
         <div className="rounded-xl border border-neutral-200 bg-[#F6EFE6] overflow-hidden">
           <div className="relative h-32 sm:h-40 bg-neutral-200">
             <img
-              src={myCafe?.image_code ? `/media/cafes/${String(myCafe.image_code).padStart(2, "0")}.jpg` : "/media/cover-default.jpg"}
+              src={resolvePublicImage(myCafe?.image_path ?? null) ?? "/media/cover-default.jpg"}
               alt=""
               className="w-full h-full object-cover"
             />
           </div>
+          {SHOW_MEDIA_DEBUG && (
+            <div className="text-[10px] opacity-60 mt-1 px-4 break-all">
+              {getImageDebugLabel(
+                resolvePublicImage(myCafe?.image_path ?? null) ?? "/media/cover-default.jpg",
+                "/media/cover-default.jpg"
+              )}
+            </div>
+          )}
           <div className="p-4 space-y-3">
             {cafeSaveToast && (
               <p className="text-sm text-green-700 font-medium">Guardado.</p>

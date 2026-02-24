@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { getCafePublicInfo, type CafePublicInfo } from "@/app/actions/cafeInfo";
+import { resolvePublicImage } from "@/lib/media";
+import { resolvePromotionImage } from "@/lib/resolvePromotionImage";
 import { Button } from "@/app/ui/components";
 import CafeName from "@/app/ui/CafeName";
 
@@ -175,13 +177,9 @@ export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false, 
     getCafePublicInfo(cafeId)
       .then((res) => {
         setData(res as CafePublicInfo | null);
-        const c = (res as any)?.cafe ?? (res as any)?.data?.cafe ?? res;
-        if (c?.image_code != null) {
-          const code2 = String(c.image_code).padStart(2, "0");
-          setCafeImgSrc(`/media/cafes/${code2}.jpg`);
-        } else if (c?.image_url ?? (c as any)?.hero_url) {
-          setCafeImgSrc((c as any).image_url ?? (c as any).hero_url);
-        }
+        const c = (res as { cafe?: { image_path?: string | null } })?.cafe ?? (res as { data?: { cafe?: { image_path?: string | null } } })?.data?.cafe ?? res;
+        const img = resolvePublicImage((c as { image_path?: string | null })?.image_path ?? null);
+        if (img) setCafeImgSrc(img);
       })
       .catch(() => setError("No se pudo cargar la información"))
       .finally(() => setLoading(false));
@@ -443,16 +441,28 @@ export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false, 
                     {(data?.promos ?? []).length === 0 ? (
                       <p className="mt-2 text-sm text-slate-600">Ninguna por el momento</p>
                     ) : (
-                      <ul className="mt-3 space-y-2">
+                      <ul className="mt-3 space-y-3">
                         {(data?.promos ?? []).map((p) => (
                           <li
                             key={p.promo_id}
-                            className="rounded-xl border border-[rgba(15,23,42,0.1)] bg-white/50 px-4 py-3"
+                            className="rounded-xl border border-[rgba(15,23,42,0.1)] bg-white/50 overflow-hidden"
                           >
-                            <span className="font-medium text-[#0F172A]">{p.title}</span>
-                            {p.description && (
-                              <p className="mt-1 text-xs text-slate-600">{p.description}</p>
-                            )}
+                            <div className="relative h-24 w-full bg-neutral-100">
+                              <img
+                                src={resolvePromotionImage({ image_path: p.image_path ?? null, image_url: p.image_url ?? null })}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = FALLBACK_COVER;
+                                }}
+                              />
+                            </div>
+                            <div className="px-4 py-3">
+                              <span className="font-medium text-[#0F172A]">{p.title}</span>
+                              {p.description && (
+                                <p className="mt-1 text-xs text-slate-600">{p.description}</p>
+                              )}
+                            </div>
                           </li>
                         ))}
                       </ul>

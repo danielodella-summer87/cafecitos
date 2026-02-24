@@ -23,6 +23,7 @@ export type OwnerContextCafe = {
   id: string;
   name: string;
   image_code: string | null;
+  image_path?: string | null;
   city: string | null;
   address: string | null;
   phone: string | null;
@@ -55,7 +56,7 @@ export async function getOwnerContext(): Promise<OwnerContext | null> {
 
   const { data: cafe, error: cafeErr } = await supabase
     .from("cafes")
-    .select("id, name, image_code, city, address, phone, email, instagram, description, hours_text")
+    .select("id, name, image_code, image_path, city, address, phone, email, instagram, description, hours_text")
     .eq("id", cafeId)
     .single();
 

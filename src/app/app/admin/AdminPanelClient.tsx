@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { PRO } from "@/lib/ui/pro";
 import {
   adminUpdateSettings,
@@ -26,6 +26,8 @@ import {
   togglePromotionActive,
   type PromotionRow,
 } from "@/app/actions/adminPromotions";
+import { resolvePromotionImage } from "@/lib/resolvePromotionImage";
+import { SHOW_MEDIA_DEBUG, getImageDebugLabel } from "@/lib/mediaDebug";
 
 type Props = {
   initialSettings: AdminSettings | null;
@@ -56,6 +58,53 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div className="text-sm font-medium mb-1">{label}</div>
       {children}
     </label>
+  );
+}
+
+const FALLBACK_PROMO_IMAGE = "/media/cover-default.jpg";
+
+function PromoViewImage({ promo }: { promo: PromotionRow }) {
+  const resolved = resolvePromotionImage(promo);
+  const [src, setSrc] = useState(resolved);
+  useEffect(() => {
+    setSrc(resolved);
+  }, [resolved]);
+  const debugLabel = SHOW_MEDIA_DEBUG ? getImageDebugLabel(src, FALLBACK_PROMO_IMAGE) : null;
+  return (
+    <div>
+      <div className="relative h-40 w-full rounded-xl overflow-hidden bg-neutral-100">
+        <img
+          src={src}
+          alt=""
+          className="w-full h-full object-cover"
+          onError={() => setSrc(FALLBACK_PROMO_IMAGE)}
+        />
+      </div>
+      {SHOW_MEDIA_DEBUG && debugLabel && (
+        <div className="text-[10px] opacity-60 mt-1 break-all">{debugLabel}</div>
+      )}
+    </div>
+  );
+}
+
+function PromoFormPreview({ image_path }: { image_path: string }) {
+  const src = resolvePromotionImage({ image_path: image_path.trim() || null });
+  const [imgSrc, setImgSrc] = useState(src);
+  useEffect(() => {
+    setImgSrc(src);
+  }, [src]);
+  if (!image_path.trim()) return null;
+  return (
+    <Field label="Vista previa">
+      <div className="relative h-24 w-full rounded-lg overflow-hidden bg-neutral-100">
+        <img
+          src={imgSrc}
+          alt=""
+          className="w-full h-full object-cover"
+          onError={() => setImgSrc(FALLBACK_PROMO_IMAGE)}
+        />
+      </div>
+    </Field>
   );
 }
 
@@ -102,7 +151,7 @@ export default function AdminPanelClient(props: Props) {
     title: "",
     subtitle: "",
     description: "",
-    image_url: "",
+    image_path: "",
     scope: "specific" as "global" | "specific",
     cafe_ids: [] as string[],
     start_at: "",
@@ -113,7 +162,7 @@ export default function AdminPanelClient(props: Props) {
     title: "",
     subtitle: "",
     description: "",
-    image_url: "",
+    image_path: "",
     scope: "specific" as "global" | "specific",
     cafe_ids: [] as string[],
     start_at: "",
@@ -903,6 +952,7 @@ export default function AdminPanelClient(props: Props) {
                               title: p.title,
                               subtitle: p.subtitle ?? "",
                               description: p.description ?? "",
+                              image_path: p.image_path ?? "",
                               image_url: p.image_url ?? "",
                               scope: (p.scope === "global" ? "global" : "specific") as "global" | "specific",
                               cafe_ids: p.cafe_ids ?? [],
@@ -946,6 +996,8 @@ export default function AdminPanelClient(props: Props) {
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
                 <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full mx-4 p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                   <div className="text-lg font-semibold">Ver promoción</div>
+                  {/* Imagen arriba */}
+                  <PromoViewImage promo={promoToView} />
                   <Field label="Título">
                     <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800">{promoToView.title}</div>
                   </Field>
@@ -955,8 +1007,14 @@ export default function AdminPanelClient(props: Props) {
                   <Field label="Descripción">
                     <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800 min-h-[4rem]">{promoToView.description ?? "—"}</div>
                   </Field>
-                  <Field label="URL imagen">
+                  <Field label="Image path">
+                    <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800 break-all">{promoToView.image_path ?? "—"}</div>
+                  </Field>
+                  <Field label="Image url">
                     <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800 break-all">{promoToView.image_url ?? "—"}</div>
+                  </Field>
+                  <Field label="Imagen (path/url en uso)">
+                    <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800 break-all">{promoToView.image_path ?? promoToView.image_url ?? "—"}</div>
                   </Field>
                   <Field label="Alcance">
                     <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800">
@@ -1050,6 +1108,14 @@ export default function AdminPanelClient(props: Props) {
                       placeholder=""
                     />
                   </Field>
+                  <Field label="Image path (opcional)">
+                    <input
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={promoForm.image_path}
+                      onChange={(e) => setPromoForm((f) => ({ ...f, image_path: e.target.value }))}
+                      placeholder="media/promo/P-001.jpg"
+                    />
+                  </Field>
                   <Field label="URL imagen (opcional)">
                     <input
                       className="w-full border rounded-lg px-3 py-2"
@@ -1058,6 +1124,7 @@ export default function AdminPanelClient(props: Props) {
                       placeholder="https://..."
                     />
                   </Field>
+                  <PromoFormPreview image_path={promoForm.image_path} image_url={promoForm.image_url} />
                   <Field label="Alcance">
                     <select
                       className="w-full border rounded-lg px-3 py-2"
@@ -1122,6 +1189,7 @@ export default function AdminPanelClient(props: Props) {
                             title: promoForm.title.trim(),
                             subtitle: promoForm.subtitle.trim() || null,
                             description: promoForm.description.trim() || null,
+                            image_path: promoForm.image_path.trim() || null,
                             image_url: promoForm.image_url.trim() || null,
                             scope: promoForm.scope,
                             cafe_ids: promoForm.scope === "specific" ? promoForm.cafe_ids : [],
@@ -1160,6 +1228,7 @@ export default function AdminPanelClient(props: Props) {
                               title: payload.title,
                               subtitle: payload.subtitle,
                               description: payload.description,
+                              image_path: payload.image_path,
                               image_url: payload.image_url,
                               is_active: true,
                               scope: payload.scope,

@@ -12,6 +12,9 @@ import { redeemWelcomeGift } from "@/app/actions/consumerSummary";
 import type { CafeListItem } from "@/app/actions/cafes";
 import type { CoffeeGuide } from "@/app/actions/coffeeGuides";
 import { getClientTiersForDisplay, type TierRow } from "@/app/actions/adminReports";
+import { resolveCafeImage } from "@/lib/resolveCafeImage";
+import { SHOW_MEDIA_DEBUG, getImageDebugLabel } from "@/lib/mediaDebug";
+import { DEFAULT_PROMO_IMAGE } from "@/lib/resolvePromoImage";
 import { getTxMeta } from "@/lib/ui/txLabels";
 import {
   Container,
@@ -74,6 +77,15 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
   }, []);
 
   const { session, balance, last10, generatedTotal, redeemedTotal, cafesMap, welcomeGiftRedeemed } = data;
+
+  useEffect(() => {
+    if (SHOW_MEDIA_DEBUG && cafesList?.length) {
+      console.log(
+        "[MEDIA_DEBUG] cafes:",
+        cafesList.map((c) => ({ id: c.id, name: c.name, image_path: c.image_path }))
+      );
+    }
+  }, [cafesList]);
 
   const [welcomeCode, setWelcomeCode] = useState("");
   const [welcomeLoading, setWelcomeLoading] = useState(false);
@@ -357,6 +369,9 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
                 >
                   {promos.map((p) => {
                     const cafeList = (p.cafes ?? []).filter(Boolean);
+                    const debugLabel = SHOW_MEDIA_DEBUG
+                      ? getImageDebugLabel(p.image, DEFAULT_PROMO_IMAGE)
+                      : undefined;
                     return (
                       <div
                         key={p.id}
@@ -369,6 +384,8 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
                           cafes={cafeList.length > 0 ? cafeList : undefined}
                           onDiscoverClick={() => onDiscoverPromo(p)}
                           onOpenCafe={handleOpenCafe}
+                          fallbackImage={DEFAULT_PROMO_IMAGE}
+                          debugLabel={debugLabel}
                         />
                       </div>
                     );
@@ -426,12 +443,18 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
               {cafesList.length === 0 ? (
                 <p className="text-sm text-slate-600">Próximamente más cafeterías.</p>
               ) : (
-                cafesList.map((cafe) => (
+                cafesList.map((cafe) => {
+                  const imageSrc = resolveCafeImage(cafe);
+                  const debugLabel = SHOW_MEDIA_DEBUG
+                    ? getImageDebugLabel(imageSrc, "/media/cover-default.jpg")
+                    : undefined;
+                  return (
                   <div key={cafe.id} className="flex flex-col gap-3">
                     <CafeCard
                       cafe={{ name: cafe.name, image_code: cafe.image_code }}
                       tag={cafe.is_active ? "Activa" : "Inactiva"}
-                      image={cafe.image_code ? `/media/cafes/${String(cafe.image_code).padStart(2, "0")}.jpg` : "/media/cover-default.jpg"}
+                      image={imageSrc}
+                      debugLabel={debugLabel}
                     />
                     <Button
                       variant="danger"
@@ -443,7 +466,8 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
                       Ver info
                     </Button>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}

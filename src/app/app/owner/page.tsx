@@ -19,6 +19,7 @@ export default async function OwnerPage() {
     id: ctx.cafe.id,
     name: ctx.cafe.name,
     image_code: ctx.cafe.image_code ?? null,
+    image_path: (ctx.cafe as { image_path?: string | null }).image_path ?? null,
     city: ctx.cafe.city ?? null,
     address: ctx.cafe.address ?? null,
     phone: ctx.cafe.phone ?? null,

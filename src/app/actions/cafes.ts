@@ -167,14 +167,15 @@ export type CafeListItem = {
   name: string;
   is_active: boolean;
   image_code: string | null;
+  image_path?: string | null;
 };
 
-/** Lista cafeterías para el admin (id, name, is_active, image_code). */
+/** Lista cafeterías (Consumer + Admin). Incluye image_path para imagen de cafetería. */
 export async function getCafes(): Promise<CafeListItem[]> {
   const sb = supabaseAdmin();
   const { data, error } = await sb
     .from("cafes")
-    .select("id, name, is_active, image_code")
+    .select("id, name, is_active, image_code, image_path")
     .order("created_at", { ascending: false });
   if (error) throw new Error(`getCafes: ${error.message}`);
   return (data ?? []) as CafeListItem[];
