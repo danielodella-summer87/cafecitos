@@ -33,7 +33,6 @@ export type CafePublicInfo = {
     title: string;
     description: string | null;
     image_path: string | null;
-    image_url: string | null;
   }>;
 };
 
@@ -148,7 +147,7 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
     if (promotionIds.length > 0) {
       const { data: promosRows } = await supabase
         .from("promotions")
-        .select("id, title, description, image_path, image_url, is_active, starts_at, ends_at")
+        .select("id, title, description, image_path, is_active, starts_at, ends_at")
         .in("id", promotionIds);
       const now = new Date().toISOString();
       const active = (promosRows ?? []).filter((p: { is_active?: boolean; starts_at?: string | null; ends_at?: string | null }) => {
@@ -157,15 +156,14 @@ export async function getCafePublicInfo(cafeId: string): Promise<CafePublicInfo 
         if (p.ends_at && p.ends_at < now) return false;
         return true;
       });
-      promos = active.map((p: { id: string; title?: string; description?: string | null; image_path?: string | null; image_url?: string | null }) => ({
+      promos = active.map((p: { id: string; title?: string; description?: string | null; image_path?: string | null }) => ({
         promo_id: p.id,
         title: (p.title ?? "").trim() || "Promo",
         description: (p.description ?? "").trim() || null,
         image_path: p.image_path ?? null,
-        image_url: p.image_url ?? null,
       }));
       if (SHOW_MEDIA_DEBUG) {
-        console.log("[MEDIA_DEBUG] getCafePublicInfo promos", { cafeId, promotionIds, count: promos.length, promos: promos.map((x) => ({ id: x.promo_id, title: x.title, image_path: x.image_path, image_url: x.image_url })) });
+        console.log("[MEDIA_DEBUG] getCafePublicInfo promos", { cafeId, promotionIds, count: promos.length, promos: promos.map((x) => ({ id: x.promo_id, title: x.title, image_path: x.image_path })) });
       }
     }
   } catch (e) {

@@ -449,7 +449,7 @@ export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false, 
                           >
                             <div className="relative h-24 w-full bg-neutral-100">
                               <img
-                                src={resolvePromotionImage({ image_path: p.image_path ?? null, image_url: p.image_url ?? null })}
+                                src={resolvePromotionImage({ image_path: p.image_path ?? null })}
                                 alt=""
                                 className="w-full h-full object-cover"
                                 onError={(e) => {

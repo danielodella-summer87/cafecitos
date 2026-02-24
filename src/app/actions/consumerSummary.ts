@@ -188,7 +188,7 @@ export async function getConsumerPromos(): Promise<ConsumerPromoItem[]> {
 
   const { data: promos, error: ePromos } = await supabase
     .from("promotions")
-    .select("id, title, description, image_path, image_url, scope, starts_at, ends_at")
+    .select("id, title, description, image_path, scope, starts_at, ends_at")
     .eq("is_active", true);
   if (ePromos || !promos?.length) return [];
 
@@ -199,7 +199,6 @@ export async function getConsumerPromos(): Promise<ConsumerPromoItem[]> {
       title?: string;
       description?: string | null;
       image_path?: string | null;
-      image_url?: string | null;
       scope?: string;
       starts_at?: string | null;
       ends_at?: string | null;

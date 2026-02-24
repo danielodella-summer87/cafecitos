@@ -953,7 +953,6 @@ export default function AdminPanelClient(props: Props) {
                               subtitle: p.subtitle ?? "",
                               description: p.description ?? "",
                               image_path: p.image_path ?? "",
-                              image_url: p.image_url ?? "",
                               scope: (p.scope === "global" ? "global" : "specific") as "global" | "specific",
                               cafe_ids: p.cafe_ids ?? [],
                               start_at: p.start_at ? p.start_at.slice(0, 16) : "",
@@ -1010,11 +1009,8 @@ export default function AdminPanelClient(props: Props) {
                   <Field label="Image path">
                     <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800 break-all">{promoToView.image_path ?? "—"}</div>
                   </Field>
-                  <Field label="Image url">
-                    <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800 break-all">{promoToView.image_url ?? "—"}</div>
-                  </Field>
-                  <Field label="Imagen (path/url en uso)">
-                    <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800 break-all">{promoToView.image_path ?? promoToView.image_url ?? "—"}</div>
+                  <Field label="Imagen (path en uso)">
+                    <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800 break-all">{promoToView.image_path ?? "—"}</div>
                   </Field>
                   <Field label="Alcance">
                     <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800">
@@ -1116,15 +1112,7 @@ export default function AdminPanelClient(props: Props) {
                       placeholder="media/promo/P-001.jpg"
                     />
                   </Field>
-                  <Field label="URL imagen (opcional)">
-                    <input
-                      className="w-full border rounded-lg px-3 py-2"
-                      value={promoForm.image_url}
-                      onChange={(e) => setPromoForm((f) => ({ ...f, image_url: e.target.value }))}
-                      placeholder="https://..."
-                    />
-                  </Field>
-                  <PromoFormPreview image_path={promoForm.image_path} image_url={promoForm.image_url} />
+                  <PromoFormPreview image_path={promoForm.image_path} />
                   <Field label="Alcance">
                     <select
                       className="w-full border rounded-lg px-3 py-2"
@@ -1190,7 +1178,6 @@ export default function AdminPanelClient(props: Props) {
                             subtitle: promoForm.subtitle.trim() || null,
                             description: promoForm.description.trim() || null,
                             image_path: promoForm.image_path.trim() || null,
-                            image_url: promoForm.image_url.trim() || null,
                             scope: promoForm.scope,
                             cafe_ids: promoForm.scope === "specific" ? promoForm.cafe_ids : [],
                             start_at: promoForm.start_at.trim() || null,
@@ -1229,7 +1216,6 @@ export default function AdminPanelClient(props: Props) {
                               subtitle: payload.subtitle,
                               description: payload.description,
                               image_path: payload.image_path,
-                              image_url: payload.image_url,
                               is_active: true,
                               scope: payload.scope,
                               start_at: payload.start_at,
