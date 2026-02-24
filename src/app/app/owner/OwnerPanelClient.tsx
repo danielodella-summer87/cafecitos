@@ -1221,54 +1221,18 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
                     </button>
                     {openDebugPanel && (
                       <div className="p-3 border-t border-neutral-300 bg-white text-xs font-mono overflow-x-auto max-h-80 overflow-y-auto space-y-2">
-                        <p><b>crossCafeEnabled:</b> {String(crossCafeEnabled)}</p>
-                        {lastRedeemDebug ? (
-                          <>
-                            {(() => {
-                              const d = lastRedeemDebug as Record<string, unknown>;
-                              return (
-                                <>
-                                  <p><b>consumerId:</b> {String(d.consumerId ?? "—")}</p>
-                                  <p><b>cafeId:</b> {String(d.cafeId ?? "—")}</p>
-                                  <p><b>usedBalance:</b> {String(d.usedBalance ?? "—")} · <b>requestedAmount:</b> {String(d.requestedAmount ?? "—")}</p>
-                                  {(d.cafeMeta as Record<string, unknown>) && (
-                                    <p><b>cafeMeta:</b> txCount={(d.cafeMeta as Record<string, unknown>).txCount} nullCafeIdCount={(d.cafeMeta as Record<string, unknown>).nullCafeIdCount}</p>
-                                  )}
-                                  {(d.globalMeta as Record<string, unknown>) && (
-                                    <p><b>globalMeta:</b> txCount={(d.globalMeta as Record<string, unknown>).txCount} nullCafeIdCount={(d.globalMeta as Record<string, unknown>).nullCafeIdCount}</p>
-                                  )}
-                                  {(d.cafeMeta as Record<string, unknown>)?.typesCount && (
-                                    <p><b>cafeMeta.typesCount:</b> {JSON.stringify((d.cafeMeta as Record<string, unknown>).typesCount)}</p>
-                                  )}
-                                  {(d.globalMeta as Record<string, unknown>)?.typesCount && (
-                                    <p><b>globalMeta.typesCount:</b> {JSON.stringify((d.globalMeta as Record<string, unknown>).typesCount)}</p>
-                                  )}
-                                  {(d.cafeMeta as Record<string, unknown>)?.last5 && (
-                                    <div><b>cafeMeta.last5:</b>
-                                      <pre className="mt-1 whitespace-pre-wrap">{JSON.stringify((d.cafeMeta as Record<string, unknown>).last5, null, 2)}</pre>
-                                    </div>
-                                  )}
-                                  {(d.globalMeta as Record<string, unknown>)?.last5 && (
-                                    <div><b>globalMeta.last5:</b>
-                                      <pre className="mt-1 whitespace-pre-wrap">{JSON.stringify((d.globalMeta as Record<string, unknown>).last5, null, 2)}</pre>
-                                    </div>
-                                  )}
-                                </>
-                              );
-                            })()}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(JSON.stringify(lastRedeemDebug, null, 2));
-                              }}
-                              className="mt-2 rounded px-2 py-1 bg-neutral-200 hover:bg-neutral-300 text-neutral-800"
-                            >
-                              Copiar debug canje
-                            </button>
-                          </>
-                        ) : (
-                          <p className="text-neutral-500">Canjeá una vez para ver el debug aquí.</p>
-                        )}
+                        <pre style={{ fontSize: 12, whiteSpace: "pre-wrap" }}>
+                          {JSON.stringify(lastRedeemDebug ?? {}, null, 2)}
+                        </pre>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(JSON.stringify(lastRedeemDebug, null, 2));
+                          }}
+                          className="mt-2 rounded px-2 py-1 bg-neutral-200 hover:bg-neutral-300 text-neutral-800"
+                        >
+                          Copiar debug canje
+                        </button>
                       </div>
                     )}
                   </div>
