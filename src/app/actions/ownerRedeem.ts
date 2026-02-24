@@ -81,7 +81,7 @@ async function getGlobalBalance(
 export type OwnerRedeemResult = { ok: true } | { ok: false; error: string };
 
 export async function ownerRedeemCafecitos(
-  input: FormData | { cedula: string; amount: number; note?: string }
+  input: FormData | { cedula: string; amount: number; note?: string; debug?: boolean }
 ): Promise<OwnerRedeemResult> {
   const parsed = schema.safeParse(normalizeInput(input));
   if (!parsed.success) {

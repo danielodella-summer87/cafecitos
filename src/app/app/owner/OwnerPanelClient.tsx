@@ -170,7 +170,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
     setLoadingLookup(true);
 
     try {
-      const res = await ownerGetConsumerSummary({ cedula: cedula.trim(), debug: debugMode });
+      const res = await ownerGetConsumerSummary({ cedula: cedula.trim() });
 
       setLastSummary(res);
       if (res && typeof res === "object" && "cross_cafe_redeem" in res && typeof (res as { cross_cafe_redeem?: boolean }).cross_cafe_redeem === "boolean") {
@@ -238,12 +238,10 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
     setLastRedeemDebug(null);
     try {
       const result = await ownerRedeemCafecitos({
-        cedula: cedula.trim(),
+        cedula,
         amount: amountVal,
         note: redeemNote?.trim() || undefined,
-        debug: debugMode,
       });
-      if (result.debug != null) setLastRedeemDebug(result.debug);
       if (result.ok) {
         setRedeemSuccess({
           name: lookup?.profile?.full_name ?? "Cliente",
@@ -810,7 +808,7 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
 
             try {
               setLoadingLookup(true);
-              const res = await ownerGetConsumerSummary({ cedula: cedula.trim(), debug: debugMode });
+              const res = await ownerGetConsumerSummary({ cedula: cedula.trim() });
               const r = res as Json;
               if (r && typeof r === "object" && "debug" in r && (r as { debug?: unknown }).debug != null) {
                 setLastSummaryDebug((r as { debug: unknown }).debug);
