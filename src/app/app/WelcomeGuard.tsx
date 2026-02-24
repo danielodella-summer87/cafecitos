@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 export default function WelcomeGuard({
@@ -12,35 +12,49 @@ export default function WelcomeGuard({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+
   const didRedirectRef = useRef(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    // pathname puede venir null en escenarios raros; evitamos ruido
     if (!pathname) return;
 
-    // Nunca redirigir desde la propia bienvenida
-    if (pathname === "/app/bienvenida") return;
-
-    // No bloquear rutas públicas / onboarding / auth
-    const isPublicOrOnboarding =
+    // No redirigir en rutas públicas / onboarding
+    if (
       pathname === "/login" ||
       pathname === "/register" ||
       pathname.startsWith("/register/") ||
       pathname === "/app/login" ||
       pathname === "/app/register" ||
-      pathname.startsWith("/app/register/");
+      pathname.startsWith("/app/register/")
+    ) {
+      return;
+    }
 
-    if (isPublicOrOnboarding) return;
-
-    // Si no hay que mostrar bienvenida, no hacemos nada
+    if (pathname === "/app/bienvenida") return;
     if (!shouldShowWelcome) return;
-
-    // Evitar bucles de replace en móvil / re-renders
     if (didRedirectRef.current) return;
-    didRedirectRef.current = true;
 
-    router.replace("/app/bienvenida");
+    didRedirectRef.current = true;
+    setIsRedirecting(true);
+
+    // micro-delay para que el overlay pinte antes del replace (mobile)
+    const t = setTimeout(() => {
+      router.replace("/app/bienvenida");
+    }, 0);
+
+    return () => clearTimeout(t);
   }, [pathname, router, shouldShowWelcome]);
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+
+      {isRedirecting ? (
+        <div className="fixed inset-0 z-[9999] bg-white flex items-center justify-center">
+          <div className="text-sm text-neutral-600">Cargando…</div>
+        </div>
+      ) : null}
+    </>
+  );
 }
