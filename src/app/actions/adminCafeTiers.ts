@@ -33,30 +33,51 @@ export async function getAdminCafeTiers(): Promise<CafeTierRow[]> {
   return (data ?? []) as CafeTierRow[];
 }
 
+export type UpsertCafeTierResult =
+  | { ok: true; id?: string }
+  | { ok: false; error: string };
+
 export async function upsertAdminCafeTier(input: {
   id?: string;
   name: string;
   min_total_points: number;
   badge_color?: string | null;
-}) {
-  await adminGuard();
-  const supabase = supabaseAdmin();
+}): Promise<UpsertCafeTierResult> {
+  try {
+    await adminGuard();
+    const supabase = supabaseAdmin();
 
-  const payload: Record<string, unknown> = {
-    name: input.name,
-    min_total_points: input.min_total_points,
-    badge_color: input.badge_color ?? null,
-  };
+    const payload: Record<string, unknown> = {
+      name: input.name.trim(),
+      min_total_points: input.min_total_points,
+      badge_color: input.badge_color ?? null,
+    };
 
-  if (input.id) payload.id = input.id;
+    if (input.id) payload.id = input.id;
 
-  const { error } = await supabase
-    .from("cafe_tiers")
-    .upsert(payload, { onConflict: "id" });
+    const { data, error } = await supabase
+      .from("cafe_tiers")
+      .upsert(payload, { onConflict: "id" })
+      .select("id")
+      .maybeSingle();
 
-  if (error) {
-    console.error("upsertAdminCafeTier", error);
-    throw new Error(error.message);
+    if (error) {
+      const code = (error as { code?: string })?.code;
+      const msg = (error as { message?: string })?.message ?? "";
+      if (code === "23505" || msg.includes("cafe_tiers_name_uq") || msg.includes("duplicate key")) {
+        return {
+          ok: false,
+          error: "Ya existe un nivel de cafetería con ese nombre. Cambiá el nombre y volvé a guardar.",
+        };
+      }
+      return { ok: false, error: msg || "Error al guardar nivel" };
+    }
+
+    const id = (data as { id?: string } | null)?.id;
+    return { ok: true, id };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error al guardar nivel";
+    return { ok: false, error: msg };
   }
 }
 

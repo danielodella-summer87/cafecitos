@@ -3,13 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { markWelcomeSeen } from "@/app/actions/onboarding";
-import { getWelcomeCode } from "@/app/actions/auth";
 import { AppMark } from "@/components/brand/AppMark";
 
 export default function BienvenidaClient() {
   const router = useRouter();
   const [status, setStatus] = useState<"saving" | "ready">("saving");
-  const [welcomeCode, setWelcomeCode] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -21,8 +19,6 @@ export default function BienvenidaClient() {
 
     (async () => {
       try {
-        const codeRes = await getWelcomeCode();
-        if (!cancelled && codeRes?.code) setWelcomeCode(codeRes.code);
         await markWelcomeSeen();
       } catch (_) {
         // ignore
@@ -39,7 +35,13 @@ export default function BienvenidaClient() {
     };
   }, []);
 
-  const continuar = () => {
+  const continuar = async () => {
+    setStatus("saving");
+    try {
+      await markWelcomeSeen();
+    } catch (_) {
+      // continue anyway so user isn't stuck
+    }
     router.replace("/app/consumer");
   };
 
@@ -48,17 +50,15 @@ export default function BienvenidaClient() {
       <h1 className="text-3xl font-semibold tracking-tight">👋 Bienvenido a <AppMark /></h1>
       <p className="mt-2 text-neutral-600">Te contamos en 30 segundos cómo funciona.</p>
 
-      {welcomeCode && (
-        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
-          <p className="text-neutral-800">
-            ¡Listo! En breve te enviaremos un WhatsApp con un código para obtener un primer regalo de AmorPerfecto: un
-            paquete de café y la acreditación de tus primeros cafecitos.
-          </p>
-          <p className="mt-3 text-sm font-medium text-neutral-700">
-            Tu código (4 dígitos): <span className="font-mono text-lg text-neutral-900">{welcomeCode}</span>
-          </p>
-        </div>
-      )}
+      <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+        <p className="text-neutral-800">
+          ¡Listo! En breve te enviaremos un WhatsApp con un código para obtener un primer regalo de AmorPerfecto: un
+          paquete de café y la acreditación de tus primeros cafecitos.
+        </p>
+        <p className="mt-3 text-sm text-neutral-700">
+          Te llegará por WhatsApp. Si no lo recibís en 2 minutos, pedile a la cafetería que lo reenvíe.
+        </p>
+      </div>
 
       <div className="mt-8 space-y-4">
         <div className="rounded-2xl border bg-white p-5 shadow-sm">

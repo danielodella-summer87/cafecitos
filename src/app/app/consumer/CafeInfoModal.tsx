@@ -103,7 +103,7 @@ export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false, 
   const cafe = cafeRaw as CafeDetailUI | null | undefined;
 
   if (typeof process !== "undefined" && process.env.NODE_ENV === "development") {
-    console.log("[CafeInfoModal] cafeId", cafeId, "data", data, "cafeRaw", cafeRaw);
+    console.log("[CafeInfoModal]", { cafeId });
   }
 
   const city = String(
@@ -154,7 +154,6 @@ export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false, 
   const showDebug = false;
 
   useEffect(() => {
-    console.log("[CafeInfoModal] cafeId recibido:", cafeId);
     if (!open) {
       setData(null);
       setError(null);
@@ -367,7 +366,7 @@ export default function CafeInfoModal({ open, cafeId, onClose, isAdmin = false, 
                         {hasLatLng && (
                           <iframe
                             src={`https://www.openstreetmap.org/export/embed.html?bbox=${lng! - 0.002},${lat! - 0.002},${lng! + 0.002},${lat! + 0.002}&layer=mapnik&marker=${lat!},${lng!}`}
-                            className="w-full h-[140px] border-0 rounded-lg"
+                            className="w-full h-[280px] border-0 rounded-lg"
                             loading="lazy"
                           />
                         )}

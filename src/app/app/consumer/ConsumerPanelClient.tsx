@@ -7,7 +7,7 @@ import Image from "next/image";
 import { Gift, ChevronDown } from "lucide-react";
 import { logout } from "@/app/actions/logout";
 import { clearModeAndGoToChooseMode } from "@/app/app/choose-mode/actions";
-import type { ConsumerSummaryResult, ConsumerTx, CafeMapItem } from "@/app/actions/consumerSummary";
+import type { ConsumerSummaryResult, ConsumerTx, CafeMapItem, ConsumerPromoItem } from "@/app/actions/consumerSummary";
 import { redeemWelcomeGift } from "@/app/actions/consumerSummary";
 import type { CafeListItem } from "@/app/actions/cafes";
 import type { CoffeeGuide } from "@/app/actions/coffeeGuides";
@@ -26,19 +26,11 @@ import { AppMark } from "@/components/brand/AppMark";
 import CafeInfoModal from "./CafeInfoModal";
 import LevelInfoModal from "./LevelInfoModal";
 
-const PROMOS_MOCK: Array<{ id: string; image: string; title: string; description: string; cafes: string[] }> = [
-  { id: "1", image: "https://images.unsplash.com/photo-1509042239860-f550ce710b93", title: "Desayuno 2x1", description: "Solo esta semana en cafeterías adheridas.", cafes: ["Portofino", "Gastolandia"] },
-  { id: "2", image: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085", title: "Happy Coffee", description: "Cafecitos extra después de las 17hs.", cafes: ["Amor Perfecto", "Cafe Nadia 2026"] },
-  { id: "3", image: "https://images.unsplash.com/photo-1442512595331-e89e73853f31", title: "Torta + café", description: "Combo torta y café a precio especial.", cafes: ["Portofino", "Gastolandia", "Amor Perfecto"] },
-  { id: "4", image: "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb", title: "Martes de descuento", description: "20% en preparaciones con leche.", cafes: ["Cafe Nadia 2026"] },
-  { id: "5", image: "https://images.unsplash.com/photo-1497935586351-b67a49e012bf", title: "Viernes de regalo", description: "Un cafecito de cortesía cada viernes.", cafes: ["Portofino", "Amor Perfecto", "Gastolandia"] },
-  { id: "6", image: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd", title: "Combo merienda", description: "Medialuna + café a precio único.", cafes: ["Gastolandia", "Cafe Nadia 2026"] },
-];
-
 type Props = {
   data: ConsumerSummaryResult;
   cafesList: CafeListItem[];
   guidesPreview?: CoffeeGuide[];
+  promos?: ConsumerPromoItem[];
 };
 
 function cafeName(cafeId: string | null, cafesMap: Record<string, CafeMapItem>): string {
@@ -64,7 +56,7 @@ function getTierByPoints(tiers: TierRow[], points: number): {
   return { currentTier: current, nextTier, remaining };
 }
 
-export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [] }: Props) {
+export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [], promos = [] }: Props) {
   const router = useRouter();
   const params = useSearchParams();
   const debug = params.get("debug") === "1";
@@ -96,7 +88,6 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
       ? Math.min(100, (Math.max(0, balance - currentTier.min_points) / (nextTier.min_points - currentTier.min_points)) * 100)
       : 100;
 
-  const promos = PROMOS_MOCK;
   const promoScrollRef = useRef<HTMLDivElement>(null);
 
   function onPrevPromo() {
@@ -111,7 +102,7 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
     const step = el.clientWidth;
     el.scrollBy({ left: step, behavior: "smooth" });
   }
-  function onDiscoverPromo(_p: (typeof promos)[0]) {
+  function onDiscoverPromo(_p: ConsumerPromoItem) {
     router.push("/app/universo-cafe");
   }
 
@@ -332,7 +323,7 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
 
           {/* DERECHA (75%) - Carrusel promos */}
           <div id="seccion-promociones" className="md:col-span-9 scroll-mt-4">
-            <Card className="md:h-[420px] flex flex-col glass-soft overflow-hidden">
+            <Card className="md:h-[420px] flex flex-col glass-soft overflow-visible">
               <div className="flex items-center justify-between shrink-0">
                 <div>
                   <CardTitle>Promociones</CardTitle>
@@ -358,27 +349,30 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
                 </div>
               </div>
 
-              {/* Contenedor scrolleable en desktop para emparejar altura con columna izquierda */}
-              <div className="mt-3 flex-1 min-h-0 overflow-auto pr-1 bg-white/10">
+              {/* Contenedor scrolleable en desktop; overflow-visible para que "Te esperamos en …" no se recorte */}
+              <div className="mt-3 flex-1 min-h-0 overflow-visible pr-1 bg-white/10">
                 <div
                   ref={promoScrollRef}
-                  className="flex items-stretch gap-4 overflow-x-auto pb-2 snap-x snap-mandatory hide-scrollbar"
+                  className="flex items-stretch gap-4 overflow-x-auto overflow-y-visible pb-2 snap-x snap-mandatory hide-scrollbar"
                 >
-                  {promos.map((p) => (
-                    <div
-                      key={p.id}
-                      className="snap-start shrink-0 w-[85vw] sm:w-[48vw] lg:w-[32vw] xl:w-[24vw]"
-                    >
-                      <PromoCard
-                        image={p.image}
-                        title={p.title}
-                        description={p.description}
-                        cafes={p.cafes}
-                        onDiscoverClick={() => onDiscoverPromo(p)}
-                        onOpenCafe={handleOpenCafe}
-                      />
-                    </div>
-                  ))}
+                  {promos.map((p) => {
+                    const cafeList = (p.cafes ?? []).filter(Boolean);
+                    return (
+                      <div
+                        key={p.id}
+                        className="snap-start shrink-0 w-[85vw] sm:w-[48vw] lg:w-[32vw] xl:w-[24vw]"
+                      >
+                        <PromoCard
+                          image={p.image}
+                          title={p.title}
+                          description={p.description}
+                          cafes={cafeList.length > 0 ? cafeList : undefined}
+                          onDiscoverClick={() => onDiscoverPromo(p)}
+                          onOpenCafe={handleOpenCafe}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </Card>

@@ -30,10 +30,11 @@ export function PromoCard({
   fallbackImage?: string;
 }) {
   const [imgSrc, setImgSrc] = useState(image);
-  const list = cafes ?? [];
+  const list = (cafes ?? []).filter(Boolean);
+  const hasCafes = list.length > 0;
 
   return (
-    <Card className="h-full overflow-hidden !bg-[#F6EFE6] border border-[rgba(15,23,42,0.10)] p-0">
+    <Card className="h-full overflow-visible !bg-[#F6EFE6] border border-[rgba(15,23,42,0.10)] p-0">
       {/* Imagen */}
       <div className="relative h-36 sm:h-40 w-full overflow-hidden rounded-t-2xl">
         <Image
@@ -57,8 +58,8 @@ export function PromoCard({
           </CardSubtitle>
         </div>
 
-        {/* Cafeterías colapsadas (sin chips visibles cerrado) */}
-        <div className="mt-3">
+        {/* Cafeterías colapsadas (sin chips visibles cerrado); z-50 para que no lo recorte el padre */
+        <div className="mt-3 relative z-50">
           <details className="rounded-xl border border-[rgba(15,23,42,0.15)] bg-white/40 px-3 py-2 group">
             <summary className="cursor-pointer list-none select-none flex items-center justify-between gap-3">
               <div className="text-sm font-medium text-[#0F172A]">
@@ -72,7 +73,7 @@ export function PromoCard({
               </div>
             </summary>
             <div className="mt-3 flex flex-wrap gap-2">
-              {list.length > 0 ? (
+              {hasCafes ? (
                 list.map((c: CafeItem) => {
                   const key = typeof c === "object" && c ? (c.id ?? c.name ?? String(c)) : String(c);
                   const label = typeof c === "object" && c && "name" in c ? c.name : String(c);
@@ -97,7 +98,7 @@ export function PromoCard({
                 })
               ) : (
                 <div className="text-sm text-slate-600">
-                  Próximamente más cafeterías adheridas.
+                  Te esperamos en cafeterías adheridas.
                 </div>
               )}
             </div>

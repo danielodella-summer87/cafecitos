@@ -2,6 +2,7 @@
 
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { hashPin } from "@/lib/security/pin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getDashboardPath, setSessionCookie, signSessionToken, clearSessionCookie } from "@/lib/auth/session";
 
@@ -12,7 +13,7 @@ const loginSchema = z.object({
 
 const CreateOwnerSchema = z.object({
   cedula: z.string().regex(/^\d{8}$/, "La cédula debe tener 8 dígitos"),
-  pin: z.string().min(3),
+  pin: z.string().min(4).max(4),
   full_name: z.string().min(2),
   cafe_name: z.string().min(2),
   phone: z.string().optional(),
@@ -22,57 +23,92 @@ function onlyDigits(v: string) {
   return (v ?? "").replace(/\D/g, "");
 }
 
-/** Login dueño/empleado por cafe_staff (cédula + PIN). No registra empleados. */
-export async function signInCafeStaff(input: { cedula: string; pin: string }) {
+/**
+ * Login unificado: siempre valida cedula+pin contra profiles.pin_hash,
+ * luego resuelve cafe_staff por profile_id para determinar rol/destino.
+ */
+export async function signInUnified(input: { cedula: string; pin: string }) {
   const parsed = loginSchema.safeParse({ cedula: onlyDigits(input.cedula.trim()), pin: input.pin.trim() });
   if (!parsed.success) return { ok: false, error: "Ingresá cédula y PIN válidos" };
 
   const supabase = supabaseAdmin();
-  const { data: rows } = await supabase
-    .from("cafe_staff")
-    .select("id, cafe_id, full_name, name, is_owner, can_issue, can_redeem, pin_hash, profile_id")
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("id, role, cedula, full_name, cafe_id, pin_hash, phone, created_at, is_active")
     .eq("cedula", parsed.data.cedula)
+    .single();
+
+  if (error || !profile) return { ok: false, error: "Usuario no registrado" };
+  if (profile.is_active === false) return { ok: false, error: "Usuario inactivo" };
+
+  const pinHash = (profile as { pin_hash?: string | null }).pin_hash;
+  if (!pinHash || String(pinHash).trim() === "") {
+    return { ok: false, error: "PIN no configurado. Contactá soporte." };
+  }
+
+  const valid = await bcrypt.compare(parsed.data.pin, pinHash);
+  if (!valid) return { ok: false, error: "PIN incorrecto" };
+
+  const role = (profile as { role?: string }).role;
+  const validRoles = ["owner", "admin", "staff", "consumer"];
+  if (!role || !validRoles.includes(role)) {
+    return { ok: false, error: "Rol no válido. Contactá soporte." };
+  }
+
+  const { data: staffRows } = await supabase
+    .from("cafe_staff")
+    .select("id, cafe_id, full_name, name, is_owner, can_issue, can_redeem")
+    .eq("profile_id", profile.id)
     .eq("is_active", true)
     .limit(1);
 
-  const row = Array.isArray(rows) ? rows[0] : rows;
-  if (!row?.id || !row.pin_hash) return { ok: false, error: "Credenciales incorrectas" };
+  const staffRow = Array.isArray(staffRows) ? staffRows[0] : staffRows;
 
-  const valid = await bcrypt.compare(parsed.data.pin, row.pin_hash);
-  if (!valid) return { ok: false, error: "PIN incorrecto" };
-
-  const profileId = (row as { profile_id?: string | null }).profile_id ?? null;
-  let role: "owner" | "staff" | "consumer" | "admin" = row.is_owner ? "owner" : "staff";
-  if (profileId) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", profileId)
-      .maybeSingle();
-    const profileRole = (profile as { role?: string } | null)?.role;
-    if (profileRole === "owner" || profileRole === "admin" || profileRole === "staff" || profileRole === "consumer") {
-      role = profileRole;
-    }
+  let redirectTo: string;
+  if (role === "admin") {
+    redirectTo = "/app/admin";
+  } else if (role === "owner") {
+    redirectTo = getDashboardPath("owner");
+  } else if (role === "staff") {
+    if (!staffRow?.id) return { ok: false, error: "No tenés asignación de staff activa." };
+    redirectTo = "/app/choose-mode";
+  } else {
+    redirectTo = "/app/consumer";
   }
 
-  const fullName = (row.full_name ?? row.name ?? "") as string;
+  const staffName = (staffRow?.full_name ?? staffRow?.name ?? "").trim();
+  const fullName = (staffName || (profile.full_name ?? "")).trim() || null;
+
   const token = signSessionToken({
-    staffId: row.id,
-    profileId,
-    role,
-    cafeId: row.cafe_id ?? null,
-    fullName: fullName || null,
-    is_owner: !!row.is_owner,
-    can_issue: row.can_issue !== false,
-    can_redeem: row.can_redeem !== false,
+    profileId: profile.id,
+    staffId: staffRow?.id ?? null,
+    role: role as "owner" | "admin" | "staff" | "consumer",
+    cafeId: (staffRow?.cafe_id ?? profile.cafe_id) ?? null,
+    fullName,
+    is_owner: staffRow ? !!staffRow.is_owner : undefined,
+    can_issue: staffRow ? staffRow.can_issue !== false : undefined,
+    can_redeem: staffRow ? staffRow.can_redeem !== false : undefined,
   });
   await setSessionCookie(token);
 
-  const redirectTo = role === "staff" ? "/app/choose-mode" : getDashboardPath(role);
+  // Consumer que entra por PIN: marcar bienvenida vista para no redirigir otra vez a /app/bienvenida
+  if (role === "consumer") {
+    await supabase
+      .from("profiles")
+      .update({ welcome_seen_at: new Date().toISOString() })
+      .eq("id", profile.id);
+  }
+
   if (process.env.NODE_ENV === "development") {
-    console.log("[auth] signInCafeStaff", { cedula: parsed.data.cedula, role, redirectTo });
+    console.log("[auth] signInUnified", { role, redirectTo, hasStaff: !!staffRow?.id });
   }
   return { ok: true, redirectTo };
+}
+
+/** Login dueño/empleado por cafe_staff (cédula + PIN). Wrapper por compatibilidad. */
+export async function signInCafeStaff(input: { cedula: string; pin: string }) {
+  return signInUnified(input);
 }
 
 export async function loginUser(input: FormData | { cedula: string; pin: string }) {
@@ -90,45 +126,7 @@ export async function loginUser(input: FormData | { cedula: string; pin: string 
   const parsed = loginSchema.safeParse({ cedula: onlyDigits(raw.cedula), pin: raw.pin });
   if (!parsed.success) return { ok: false, error: "Ingresá cédula y PIN válidos" };
 
-  const supabase = supabaseAdmin();
-
-  // 1) Acceso cafetería: dueño/empleado por cafe_staff (cedula + PIN)
-  const staffRes = await signInCafeStaff({ cedula: parsed.data.cedula, pin: parsed.data.pin });
-  if (staffRes.ok) return staffRes;
-
-  // 2) Usuario por profiles (consumidor, owner legacy, admin)
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("id, role, cedula, full_name, cafe_id, pin_hash, phone, created_at, is_active")
-    .eq("cedula", parsed.data.cedula)
-    .single();
-
-  if (error || !profile) return { ok: false, error: "Usuario no registrado" };
-  if (profile.is_active === false) return { ok: false, error: "Usuario inactivo" };
-
-  const valid = await bcrypt.compare(parsed.data.pin, profile.pin_hash);
-  if (!valid) return { ok: false, error: "PIN incorrecto" };
-
-  const role = (profile as { role?: string }).role;
-  const validRoles = ["owner", "admin", "staff", "consumer"];
-  if (!role || !validRoles.includes(role)) {
-    return { ok: false, error: "Rol no válido. Contactá soporte." };
-  }
-
-  const token = signSessionToken({
-    profileId: profile.id,
-    role: role as "owner" | "admin" | "staff" | "consumer",
-    cafeId: profile.cafe_id ?? null,
-    fullName: profile.full_name ?? null,
-  });
-
-  await setSessionCookie(token);
-
-  const redirectTo = role === "staff" ? "/app/choose-mode" : getDashboardPath(role as "owner" | "admin" | "consumer");
-  if (process.env.NODE_ENV === "development") {
-    console.log("[auth] loginUser profiles", { cedula: parsed.data.cedula, role, redirectTo });
-  }
-  return { ok: true, redirectTo };
+  return signInUnified({ cedula: parsed.data.cedula, pin: parsed.data.pin });
 }
 
 export async function registerUser(
@@ -196,7 +194,7 @@ export async function registerUser(
   const { data: existing } = await supabase.from("profiles").select("id").eq("cedula", parsed.data.cedula).maybeSingle();
   if (existing?.id) return { ok: false, error: "Ya existe un usuario con esa cédula" };
 
-  const pin_hash = await bcrypt.hash(parsed.data.pin, 10);
+  const pin_hash = await hashPin(parsed.data.pin);
 
   const { data: profileInserted, error: pErr } = await supabase
     .from("profiles")
@@ -285,7 +283,7 @@ export async function createOwner(input: FormData | { cedula: string; pin: strin
   });
   if (!parsed.success) return { ok: false, error: "Datos inválidos" };
 
-  const pin_hash = await bcrypt.hash(parsed.data.pin, 10);
+  const pin_hash = await hashPin(parsed.data.pin);
 
   const db = supabaseAdmin();
   const cafeInsert = await db.from("cafes").insert({ name: parsed.data.cafe_name }).select("id").single();

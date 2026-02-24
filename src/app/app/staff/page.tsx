@@ -1,11 +1,14 @@
 import { getStaffContext } from "@/app/actions/ownerStaff";
 import { getSession } from "@/lib/auth/session";
+import { getModeFromCookie } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import StaffPanelClient from "./StaffPanelClient";
 
 export default async function StaffPage() {
   const session = await getSession();
   if (!session || session.role !== "staff") redirect("/login");
+  const mode = await getModeFromCookie();
+  if (mode !== "staff") redirect("/app/choose-mode");
 
   const ctx = await getStaffContext();
   if (!ctx) redirect("/login");

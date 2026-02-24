@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 const COOKIE_NAME = "cafecitos_session";
 
+// TODO/PR: Este endpoint permite setear la cookie de sesión con profileId via body; validar autorización o eliminar si no se usa.
 export async function POST(req: Request) {
   const { profileId } = await req.json();
 

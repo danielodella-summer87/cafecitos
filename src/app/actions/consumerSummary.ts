@@ -50,7 +50,8 @@ export type ConsumerSummaryResult = {
 
 export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null> {
   const session = await getSession();
-  if (!session || session.role !== "consumer") return null;
+  if (!session) return null;
+  if (session.role !== "consumer" && session.role !== "staff") return null;
 
   const safeProfileId = (session.profileId ?? "").toString();
 
@@ -148,9 +149,8 @@ export async function getConsumerSummary(): Promise<ConsumerSummaryResult | null
 /** Canjear regalo de bienvenida con código DDMM. Solo consumer; valida sesión y llama RPC. */
 export async function redeemWelcomeGift(code: string): Promise<{ ok: boolean; message: string; credited?: number }> {
   const session = await getSession();
-  if (!session || session.role !== "consumer" || !session.profileId) {
-    return { ok: false, message: "Sesión inválida" };
-  }
+  if (!session || !session.profileId) return { ok: false, message: "Sesión inválida" };
+  if (session.role !== "consumer" && session.role !== "staff") return { ok: false, message: "Sesión inválida" };
   const trimmed = String(code ?? "").trim().replace(/\D/g, "");
   if (trimmed.length !== 4) {
     return { ok: false, message: "El código debe tener 4 dígitos" };
@@ -168,6 +168,81 @@ export async function redeemWelcomeGift(code: string): Promise<{ ok: boolean; me
     return { ok: true, message: result.message ?? "Regalo activado", credited: result.credited };
   }
   return { ok: false, message: result?.message ?? "No se pudo activar el regalo" };
+}
+
+/** Promos para consumer: desde promotions + promotion_cafes + cafes. scope=global => todas las cafeterías activas; scope=specific => solo asignadas. */
+export type ConsumerPromoItem = {
+  id: string;
+  image: string;
+  title: string;
+  description: string;
+  cafes: string[];
+};
+
+export async function getConsumerPromos(): Promise<ConsumerPromoItem[]> {
+  const session = await getSession();
+  if (!session || (session.role !== "consumer" && session.role !== "staff")) return [];
+
+  const supabase = supabaseAdmin();
+
+  const { data: promos, error: ePromos } = await supabase
+    .from("promotions")
+    .select("id, title, description, image_url, scope, starts_at, ends_at")
+    .eq("is_active", true);
+  if (ePromos || !promos?.length) return [];
+
+  const now = new Date().toISOString();
+  const activePromos = (
+    promos as Array<{
+      id: string;
+      title?: string;
+      description?: string | null;
+      image_url?: string | null;
+      scope?: string;
+      starts_at?: string | null;
+      ends_at?: string | null;
+    }>
+  ).filter((p) => {
+    if (p.starts_at && p.starts_at > now) return false;
+    if (p.ends_at && p.ends_at < now) return false;
+    return true;
+  });
+
+  const { data: activeCafes } = await supabase
+    .from("cafes")
+    .select("id, name")
+    .eq("is_active", true);
+  const allCafeNames: Record<string, string> = {};
+  for (const c of activeCafes ?? []) {
+    const row = c as { id: string; name?: string };
+    allCafeNames[row.id] = (row.name ?? "").trim() || "(sin nombre)";
+  }
+  const globalCafeNames = Object.values(allCafeNames).filter((n) => n !== "(sin nombre)");
+
+  const result: ConsumerPromoItem[] = [];
+  const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1509042239860-f550ce710b93";
+
+  for (const p of activePromos) {
+    let cafes: string[] = [];
+    if (p.scope === "global") {
+      cafes = [...globalCafeNames];
+    } else {
+      const { data: links } = await supabase
+        .from("promotion_cafes")
+        .select("cafe_id")
+        .eq("promotion_id", p.id);
+      const ids = (links ?? []).map((r: { cafe_id: string }) => r.cafe_id);
+      cafes = ids.map((cid) => allCafeNames[cid]).filter(Boolean);
+    }
+    result.push({
+      id: p.id,
+      image: (p.image_url ?? "").trim() || DEFAULT_IMAGE,
+      title: (p.title ?? "").trim() || "Promo",
+      description: (p.description ?? "").trim() || "",
+      cafes,
+    });
+  }
+  return result;
 }
 
 /** Balance de cafecitos para un perfil (p. ej. Universo Café). */

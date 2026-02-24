@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/auth/session";
 import { getDashboardPath, getModeFromCookie } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
-import { getConsumerSummary } from "@/app/actions/consumerSummary";
+import { getConsumerSummary, getConsumerPromos } from "@/app/actions/consumerSummary";
 import { getCafes } from "@/app/actions/cafes";
 import { getCoffeeGuides } from "@/app/actions/coffeeGuides";
 import ConsumerPanelClient from "./ConsumerPanelClient";
@@ -16,10 +16,11 @@ export default async function ConsumerPage() {
     if (mode !== "consumer") redirect("/app/choose-mode");
   }
 
-  const [data, cafesList, guidesRes] = await Promise.all([
+  const [data, cafesList, guidesRes, promos] = await Promise.all([
     getConsumerSummary(),
     getCafes(),
     getCoffeeGuides(),
+    getConsumerPromos(),
   ]);
 
   if (!data) {
@@ -33,6 +34,7 @@ export default async function ConsumerPage() {
       data={data}
       cafesList={cafesList.filter((c) => c.is_active)}
       guidesPreview={guidesPreview}
+      promos={promos}
     />
   );
 }

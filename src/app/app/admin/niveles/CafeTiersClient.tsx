@@ -12,6 +12,8 @@ type Props = { initial: CafeTierRow[] };
 export default function CafeTiersClient({ initial }: Props) {
   const [rows, setRows] = useState<CafeTierRow[]>(initial);
   const [isPending, startTransition] = useTransition();
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const sorted = useMemo(() => {
     return [...rows].sort((a, b) => (a.min_total_points ?? 0) - (b.min_total_points ?? 0));
@@ -22,14 +24,24 @@ export default function CafeTiersClient({ initial }: Props) {
   };
 
   const onSave = (row: CafeTierRow) => {
+    if ((row.name ?? "").trim().length === 0) return;
     startTransition(async () => {
-      await upsertAdminCafeTier({
+      const result = await upsertAdminCafeTier({
         id: row.id,
         name: row.name,
         min_total_points: Number(row.min_total_points ?? 0),
         badge_color: row.badge_color ?? null,
       });
-      alert("Guardado ✅");
+      if (!result.ok) {
+        setSaveError(result.error);
+        return;
+      }
+      setSaveError(null);
+      if (result.id && result.id !== row.id) {
+        setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, id: result.id! } : r)));
+      }
+      setToast("Guardado ✅");
+      setTimeout(() => setToast(null), 2500);
     });
   };
 
@@ -47,7 +59,7 @@ export default function CafeTiersClient({ initial }: Props) {
       ...prev,
       {
         id: nowId,
-        name: "Bronce",
+        name: "",
         min_total_points: 0,
         badge_color: "#CD7F32",
         created_at: null,
@@ -58,6 +70,16 @@ export default function CafeTiersClient({ initial }: Props) {
 
   return (
     <div className="space-y-4">
+      {saveError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {saveError}
+        </div>
+      )}
+      {toast && (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+          {toast}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Niveles de cafeterías</h2>
@@ -91,6 +113,7 @@ export default function CafeTiersClient({ initial }: Props) {
                 <td className="p-3">
                   <input
                     className="border rounded px-2 py-1 w-full"
+                    placeholder="Ej: Bronce / Plata / Oro"
                     value={r.name ?? ""}
                     onChange={(e) => onChange(r.id, { name: e.target.value })}
                   />
@@ -114,9 +137,9 @@ export default function CafeTiersClient({ initial }: Props) {
                 <td className="p-3 text-right space-x-2">
                   <button
                     type="button"
-                    className="px-3 py-1 rounded bg-black text-white hover:bg-gray-800"
+                    className="px-3 py-1 rounded bg-black text-white hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => onSave(r)}
-                    disabled={isPending}
+                    disabled={isPending || (r.name ?? "").trim().length === 0}
                   >
                     Guardar
                   </button>

@@ -22,7 +22,7 @@ import {
 } from "@/app/actions/ownerTransactions";
 import { ownerGetConsumerSummary } from "@/app/actions/ownerSummary";
 import { AppMark } from "@/components/brand/AppMark";
-import { isValidCi, normalizeCi } from "@/lib/ci";
+import { isValidCi } from "@/lib/ci";
 import { getTxMeta } from "@/lib/ui/txLabels";
 import { PRO } from "@/lib/ui/pro";
 import OwnerStaffManager from "./OwnerStaffManager";
@@ -769,9 +769,14 @@ export default function OwnerPanelClient({ me, myCafe, capabilities: caps }: Pro
         <input
           ref={cedulaInputRef}
           value={cedula}
-          onChange={(e) => setCedula(normalizeCi(e.target.value))}
+          onChange={(e) => {
+            const onlyNumbers = e.target.value.replace(/\D/g, "");
+            setCedula(onlyNumbers.slice(0, 8));
+          }}
           placeholder="Ingresá cédula (8 dígitos)"
           inputMode="numeric"
+          maxLength={8}
+          pattern="[0-9]*"
           autoComplete="off"
           className="w-full border rounded px-3 py-2"
         />

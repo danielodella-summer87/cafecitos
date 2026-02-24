@@ -18,7 +18,7 @@ export type CreateCafeInput = {
   staff: Array<{
     name: string;
     role: string;
-    is_owner?: boolean;
+    profile_id?: string;
   }>;
 };
 
@@ -58,6 +58,22 @@ export async function getNextImageCode(): Promise<string> {
   return getNextAvailableImageCode();
 }
 
+/** Buscar profile por cédula (solo admin). Para Personas autorizadas en Edit Cafetería. */
+export async function lookupProfileByCedula(cedula: string): Promise<{ id: string; full_name: string | null } | null> {
+  const session = await getSession();
+  if (!session || session.role !== "admin") throw new Error("No autorizado");
+  const ced = (cedula ?? "").replace(/\D/g, "").trim();
+  if (ced.length !== 8) return null;
+  const sb = supabaseAdmin();
+  const { data, error } = await sb
+    .from("profiles")
+    .select("id, full_name")
+    .eq("cedula", ced)
+    .maybeSingle();
+  if (error || !data) return null;
+  return { id: (data as { id: string }).id, full_name: (data as { full_name?: string | null }).full_name ?? null };
+}
+
 export async function createCafe(
   input: Omit<CreateCafeInput, "image_code"> & { image_code?: string }
 ) {
@@ -67,14 +83,16 @@ export async function createCafe(
   if (name.length < 5) throw new Error("El nombre debe tener al menos 5 caracteres.");
 
   const staff = (input.staff ?? [])
-    .map((s, idx) => ({
-      name: (s.name ?? "").trim(),
-      role: (s.role ?? "").trim(),
-      is_owner: idx === 0 ? true : Boolean(s.is_owner),
-    }))
-    .filter((s) => s.name.length > 0 && s.role.length > 0);
+    .map((s) => {
+      const role = (s.role ?? "staff").trim().toLowerCase();
+      return {
+        name: (s.name ?? "").trim(),
+        role: role === "admin" ? "admin" : "staff",
+        profile_id: s.profile_id?.trim() || undefined,
+      };
+    })
+    .filter((s) => s.name.length > 0);
 
-  if (staff.length < 1) throw new Error("Debe existir al menos 1 persona autorizada (Dueño/a).");
   if (staff.length > 5) throw new Error("Máximo 5 personas autorizadas.");
 
   const image_code =
@@ -108,35 +126,37 @@ export async function createCafe(
 
   if (cafeErr) throw new Error(`createCafe insert cafes: ${cafeErr.message}`);
 
-  const staffRows = staff.map((p, idx) => ({
-    cafe_id: cafe.id,
-    full_name: (p.name ?? "").trim(),
-    role: (p.role ?? "").trim(),
-    is_owner: idx === 0,
-    can_issue: true,
-    can_redeem: true,
-    is_active: true,
-  }));
+  const staffRows = staff
+    .filter((p) => p.profile_id)
+    .map((p) => ({
+      cafe_id: cafe.id,
+      full_name: (p.name ?? "").trim(),
+      role: p.role === "admin" ? "admin" : "staff",
+      profile_id: p.profile_id,
+      can_issue: true,
+      can_redeem: true,
+      is_active: true,
+    }));
 
-  // Insert staff (intenta con can_issue/can_redeem; si la tabla no las tiene, fallback)
-  const { error: staffErr } = await sb.from("cafe_staff").insert(staffRows);
+  if (staffRows.length > 0) {
+    const { error: staffErr } = await sb.from("cafe_staff").insert(staffRows);
 
-  if (staffErr) {
-    const msg = (staffErr as any)?.message ?? "";
+    if (staffErr) {
+      const msg = (staffErr as any)?.message ?? "";
 
-    const looksLikeMissingCols =
-      msg.includes("Could not find the 'can_issue' column") ||
-      msg.includes("Could not find the 'can_redeem' column");
+      const looksLikeMissingCols =
+        msg.includes("Could not find the 'can_issue' column") ||
+        msg.includes("Could not find the 'can_redeem' column");
 
-    if (!looksLikeMissingCols) {
-      throw new Error(`createCafe insert cafe_staff: ${msg}`);
+      if (!looksLikeMissingCols) {
+        throw new Error(`createCafe insert cafe_staff: ${msg}`);
+      }
+
+      const fallbackStaff = staffRows.map(({ can_issue, can_redeem, ...rest }) => rest);
+
+      const { error: staffErr2 } = await sb.from("cafe_staff").insert(fallbackStaff);
+      if (staffErr2) throw new Error(`createCafe insert cafe_staff (fallback): ${(staffErr2 as any)?.message ?? ""}`);
     }
-
-    // fallback: insertar sin can_issue/can_redeem
-    const fallbackStaff = staffRows.map(({ can_issue, can_redeem, ...rest }) => rest);
-
-    const { error: staffErr2 } = await sb.from("cafe_staff").insert(fallbackStaff);
-    if (staffErr2) throw new Error(`createCafe insert cafe_staff (fallback): ${(staffErr2 as any)?.message ?? ""}`);
   }
 
   return cafe as { id: string; name: string; image_code: string };
@@ -174,7 +194,7 @@ export type UpdateCafeInput = {
   is_active?: boolean;
   lat?: number | null;
   lng?: number | null;
-  staff: Array<{ name: string; role: string; is_owner?: boolean }>;
+  staff: Array<{ name: string; role: string; profile_id?: string }>;
 };
 
 export async function updateCafe(input: UpdateCafeInput) {
@@ -186,15 +206,26 @@ export async function updateCafe(input: UpdateCafeInput) {
   const name = (input.name ?? "").trim();
   if (name.length < 5) throw new Error("El nombre debe tener al menos 5 caracteres.");
 
-  const staff = (input.staff ?? [])
-    .map((s, idx) => ({
-      name: (s.name ?? "").trim(),
-      role: (s.role ?? "").trim(),
-      is_owner: idx === 0 ? true : Boolean(s.is_owner),
-    }))
-    .filter((s) => s.name.length > 0 && s.role.length > 0);
+  const staffRaw = (input.staff ?? [])
+    .map((s) => {
+      const role = (s.role ?? "staff").trim().toLowerCase();
+      if (role === "owner" || role === "dueño/a" || role === "dueño") {
+        throw new Error("El rol owner/Dueño no se asigna en Personas autorizadas. Solo admin o staff.");
+      }
+      return {
+        name: (s.name ?? "").trim(),
+        role: role === "admin" ? "admin" : "staff",
+        profile_id: s.profile_id?.trim() || undefined,
+      };
+    })
+    .filter((s) => s.name.length > 0);
 
-  if (staff.length < 1) throw new Error("Debe existir al menos 1 persona autorizada (Dueño/a).");
+  const staffWithoutProfile = staffRaw.find((s) => !s.profile_id);
+  if (staffWithoutProfile) {
+    throw new Error("Cada persona autorizada debe tener profile_id. Buscá por cédula y seleccioná el usuario.");
+  }
+
+  const staff = staffRaw;
   if (staff.length > 5) throw new Error("Máximo 5 personas autorizadas.");
 
   const image_code = (input.image_code ?? "").toString().trim().padStart(2, "0") || "01";
@@ -223,27 +254,31 @@ export async function updateCafe(input: UpdateCafeInput) {
 
   await sb.from("cafe_staff").delete().eq("cafe_id", id);
 
-  const staffRows = staff.map((p, idx) => ({
-    cafe_id: id,
-    full_name: p.name,
-    role: p.role,
-    is_owner: idx === 0,
-    can_issue: true,
-    can_redeem: true,
-    is_active: true,
-  }));
+  const staffRows = staff
+    .filter((p) => p.profile_id)
+    .map((p) => ({
+      cafe_id: id,
+      full_name: p.name,
+      role: p.role,
+      profile_id: p.profile_id,
+      can_issue: true,
+      can_redeem: true,
+      is_active: true,
+    }));
 
-  const { error: staffErr } = await sb.from("cafe_staff").insert(staffRows);
+  if (staffRows.length > 0) {
+    const { error: staffErr } = await sb.from("cafe_staff").insert(staffRows);
 
-  if (staffErr) {
-    const msg = (staffErr as Error)?.message ?? "";
-    const missingCols =
-      msg.includes("Could not find the 'can_issue' column") ||
-      msg.includes("Could not find the 'can_redeem' column");
-    if (!missingCols) throw new Error(`updateCafe staff: ${msg}`);
-    const fallback = staffRows.map(({ can_issue, can_redeem, ...rest }) => rest);
-    const { error: e2 } = await sb.from("cafe_staff").insert(fallback);
-    if (e2) throw new Error(`updateCafe staff: ${(e2 as Error).message}`);
+    if (staffErr) {
+      const msg = (staffErr as Error)?.message ?? "";
+      const missingCols =
+        msg.includes("Could not find the 'can_issue' column") ||
+        msg.includes("Could not find the 'can_redeem' column");
+      if (!missingCols) throw new Error(`updateCafe staff: ${msg}`);
+      const fallback = staffRows.map(({ can_issue, can_redeem, ...rest }) => rest);
+      const { error: e2 } = await sb.from("cafe_staff").insert(fallback);
+      if (e2) throw new Error(`updateCafe staff: ${(e2 as Error).message}`);
+    }
   }
 
   return cafe as { id: string; name: string; image_code: string; is_active: boolean };

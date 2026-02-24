@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { PRO } from "@/lib/ui/pro";
 import {
@@ -17,6 +18,14 @@ import {
   type AdminReward,
 } from "@/app/actions/adminPro";
 import { logout } from "@/app/actions/logout";
+import { createOwnerForCafe } from "@/app/actions/adminOwners";
+import {
+  createPromotion,
+  updatePromotion,
+  deletePromotion,
+  togglePromotionActive,
+  type PromotionRow,
+} from "@/app/actions/adminPromotions";
 
 type Props = {
   initialSettings: AdminSettings | null;
@@ -35,10 +44,11 @@ type Props = {
   }>;
   initialCafes: Array<{ id: string; name: string; is_active?: boolean }>;
   initialOwnerCafes?: Record<string, Array<{ cafe_id: string; cafe_name: string; cafe_tier_name: string | null; badge_color: string | null; total_points: number }>>;
+  initialPromotions?: PromotionRow[];
   serverErrors: string[];
 };
 
-type Tab = "config" | "tiers" | "rewards" | "profiles" | "cafes";
+type Tab = "config" | "tiers" | "rewards" | "profiles" | "owners" | "promotions" | "cafes";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -50,6 +60,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function AdminPanelClient(props: Props) {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("config");
   const [toast, setToast] = useState<string | null>(null);
   const toastRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
@@ -70,12 +81,68 @@ export default function AdminPanelClient(props: Props) {
   const [rewards, setRewards] = useState<AdminReward[]>(props.initialRewards ?? []);
   const [profiles, setProfiles] = useState(props.initialProfiles ?? []);
   const [cafes, setCafes] = useState(props.initialCafes ?? []);
+  const [promotions, setPromotions] = useState<PromotionRow[]>(props.initialPromotions ?? []);
   const [exportLoading, setExportLoading] = useState(false);
+  const [ownerModalOpen, setOwnerModalOpen] = useState(false);
+  const [ownerSubmitting, setOwnerSubmitting] = useState(false);
+  const [ownerForm, setOwnerForm] = useState({
+    full_name: "",
+    cedula: "",
+    pin: "",
+    phone: "",
+    cafe_id: "",
+  });
+  const [promoModalOpen, setPromoModalOpen] = useState(false);
+  const [promoModalEditingId, setPromoModalEditingId] = useState<string | null>(null);
+  const [promoViewOpen, setPromoViewOpen] = useState(false);
+  const [promoToView, setPromoToView] = useState<PromotionRow | null>(null);
+  const [promoSubmitting, setPromoSubmitting] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoForm, setPromoForm] = useState({
+    title: "",
+    subtitle: "",
+    description: "",
+    image_url: "",
+    scope: "specific" as "global" | "specific",
+    cafe_ids: [] as string[],
+    start_at: "",
+    end_at: "",
+  });
+
+  const emptyPromoForm = () => ({
+    title: "",
+    subtitle: "",
+    description: "",
+    image_url: "",
+    scope: "specific" as "global" | "specific",
+    cafe_ids: [] as string[],
+    start_at: "",
+    end_at: "",
+  });
 
   const tierOptions = useMemo(
     () => [{ id: "", name: "— Sin nivel —" }, ...tiers.map((t) => ({ id: t.id ?? "", name: t.name }))],
     [tiers]
   );
+
+  const consumers = useMemo(
+    () => (profiles ?? []).filter((u) => u.role === "consumer"),
+    [profiles]
+  );
+
+  // Tab Owners: solo role === "owner". Admins no se listan aquí.
+  const owners = useMemo(
+    () => (profiles ?? []).filter((u) => u.role === "owner"),
+    [profiles]
+  );
+
+  const cafeNameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const c of cafes) {
+      if (c.id) m[c.id] = c.name ?? "—";
+    }
+    return m;
+  }, [cafes]);
 
   function notify(msg: string) {
     setToast(msg);
@@ -117,7 +184,7 @@ export default function AdminPanelClient(props: Props) {
             <Image src="/logoamorperfecto.png" alt="Amor Perfecto" width={40} height={40} className="h-10 w-auto" />
             <h1 className="text-3xl font-semibold">Panel Admin</h1>
           </div>
-          <form action={logout}>
+          <form action={logout} onSubmit={() => { if (typeof window !== "undefined") localStorage.removeItem("cafecitos.activeRoleMode"); }}>
             <button type="submit" className="px-4 py-2 rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium">
               Salir
             </button>
@@ -130,6 +197,8 @@ export default function AdminPanelClient(props: Props) {
             Niveles
           </Link>
           <button className={`px-4 py-2 rounded-md border ${tab === "profiles" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("profiles")}>Clientes</button>
+          <button className={`px-4 py-2 rounded-md border ${tab === "owners" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("owners")}>Owners</button>
+          <button className={`px-4 py-2 rounded-md border ${tab === "promotions" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("promotions")}>Promociones</button>
           <Link href="/app/admin/cafes" className="px-4 py-2 rounded-md border bg-white hover:bg-neutral-50 text-neutral-700 no-underline">
             Cafeterías
           </Link>
@@ -485,7 +554,7 @@ export default function AdminPanelClient(props: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {profiles.map((p) => (
+                  {consumers.map((p) => (
                     <tr key={p.id} className="border-t">
                       <td className="p-3 font-medium">
                         {p.role === "owner" && p.cafe_id ? (
@@ -589,6 +658,567 @@ export default function AdminPanelClient(props: Props) {
             <div className="text-xs text-neutral-500">
               Admin no se puede desactivar.
             </div>
+          </div>
+        )}
+
+        {/* ========================= OWNERS ========================= */}
+        {tab === "owners" && (
+          <div className="rounded-2xl border p-6 bg-white space-y-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div className="text-xl font-semibold">Owners</div>
+                <div className="text-sm text-neutral-500">Usuarios con rol owner (solo en profiles). Cafetería asociada por cafe_id.</div>
+              </div>
+              <button
+                type="button"
+                className="rounded-lg border px-4 py-2 hover:bg-neutral-50 font-medium"
+                onClick={() => setOwnerModalOpen(true)}
+              >
+                Crear owner
+              </button>
+            </div>
+
+            {ownerModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !ownerSubmitting && setOwnerModalOpen(false)}>
+                <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="text-lg font-semibold">Crear owner</div>
+                  <Field label="Nombre">
+                    <input
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={ownerForm.full_name}
+                      onChange={(e) => setOwnerForm((f) => ({ ...f, full_name: e.target.value }))}
+                      placeholder="Nombre completo"
+                    />
+                  </Field>
+                  <Field label="Cédula (8 dígitos)">
+                    <input
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={ownerForm.cedula}
+                      onChange={(e) => setOwnerForm((f) => ({ ...f, cedula: e.target.value.replace(/\D/g, "").slice(0, 8) }))}
+                      placeholder="12345678"
+                      maxLength={8}
+                      inputMode="numeric"
+                    />
+                  </Field>
+                  {/* PIN normalizado a 4 dígitos: maxLength=4 y sanitizado en onChange. */}
+                  <Field label="PIN (4 dígitos)">
+                    <input
+                      className="w-full border rounded-lg px-3 py-2"
+                      type="password"
+                      value={ownerForm.pin}
+                      onChange={(e) => setOwnerForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                      placeholder="••••"
+                      maxLength={4}
+                      inputMode="numeric"
+                    />
+                  </Field>
+                  <Field label="Teléfono (opcional)">
+                    <input
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={ownerForm.phone}
+                      onChange={(e) => setOwnerForm((f) => ({ ...f, phone: e.target.value }))}
+                      placeholder=""
+                    />
+                  </Field>
+                  <Field label="Cafetería">
+                    <select
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={ownerForm.cafe_id}
+                      onChange={(e) => setOwnerForm((f) => ({ ...f, cafe_id: e.target.value }))}
+                    >
+                      <option value="">— Seleccionar —</option>
+                      {[...cafes].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")).map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      className="rounded-lg bg-black text-white px-4 py-2 disabled:opacity-50"
+                      disabled={ownerSubmitting || !ownerForm.full_name.trim() || ownerForm.cedula.length !== 8 || ownerForm.pin.length < 4 || !ownerForm.cafe_id}
+                      onClick={async () => {
+                        setOwnerSubmitting(true);
+                        try {
+                          const res = await createOwnerForCafe({
+                            full_name: ownerForm.full_name.trim(),
+                            cedula: ownerForm.cedula,
+                            pin: ownerForm.pin,
+                            phone: ownerForm.phone.trim() || undefined,
+                            cafe_id: ownerForm.cafe_id,
+                          });
+                          if (!res.ok) {
+                            notify(`Error: ${res.error}`);
+                            return;
+                          }
+                          setProfiles((prev) => [
+                            ...prev,
+                            {
+                              id: res.owner.id,
+                              full_name: res.owner.full_name,
+                              cedula: res.owner.cedula,
+                              role: "owner",
+                              is_active: true,
+                              tier_id: null,
+                              cafe_id: res.owner.cafe_id,
+                              created_at: new Date().toISOString(),
+                              phone: ownerForm.phone.trim() || null,
+                            },
+                          ]);
+                          notify("✅ Owner creado");
+                          setOwnerModalOpen(false);
+                          setOwnerForm({ full_name: "", cedula: "", pin: "", phone: "", cafe_id: "" });
+                          router.refresh();
+                        } finally {
+                          setOwnerSubmitting(false);
+                        }
+                      }}
+                    >
+                      {ownerSubmitting ? "Guardando…" : "Crear"}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border px-4 py-2 hover:bg-neutral-50"
+                      disabled={ownerSubmitting}
+                      onClick={() => { setOwnerModalOpen(false); setOwnerForm({ full_name: "", cedula: "", pin: "", phone: "", cafe_id: "" }); }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="overflow-auto border rounded-xl">
+              <table className="min-w-[700px] w-full text-sm">
+                <thead className="bg-neutral-50">
+                  <tr className="text-left">
+                    <th className="p-3">Nombre</th>
+                    <th className="p-3">CI / ID</th>
+                    <th className="p-3">Rol</th>
+                    <th className="p-3">Cafetería asociada</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {owners.map((p) => (
+                    <tr key={p.id} className="border-t">
+                      <td className="p-3 font-medium">{p.full_name ?? "(sin nombre)"}</td>
+                      <td className="p-3">{p.cedula}</td>
+                      <td className="p-3">
+                        {/* Badge por rol: Owner / Admin. */}
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${p.role === "owner" ? "bg-amber-100 text-amber-800" : "bg-neutral-100 text-neutral-700"}`}>
+                          {p.role === "owner" ? "Owner" : "Admin"}
+                        </span>
+                      </td>
+                      <td className="p-3">{p.cafe_id ? (cafeNameById[p.cafe_id] ?? "—") : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ========================= PROMOCIONES ========================= */}
+        {tab === "promotions" && (
+          <div className="rounded-2xl border p-6 bg-white space-y-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div className="text-xl font-semibold">Promociones</div>
+                <div className="text-sm text-neutral-500">Crear, editar y asignar a cafeterías. Global = todas las activas; Específica = solo las elegidas.</div>
+              </div>
+              <button
+                type="button"
+                className="rounded-lg border px-4 py-2 hover:bg-neutral-50 font-medium"
+                onClick={() => {
+                  setPromoModalEditingId(null);
+                  setPromoError(null);
+                  setPromoForm(emptyPromoForm());
+                  setPromoModalOpen(true);
+                }}
+              >
+                + Crear promoción
+              </button>
+            </div>
+
+            <div className="overflow-auto border rounded-xl">
+              <table className="min-w-[700px] w-full text-sm">
+                <thead className="bg-neutral-50">
+                  <tr className="text-left">
+                    <th className="p-3">Título</th>
+                    <th className="p-3">Alcance</th>
+                    <th className="p-3">Cafeterías</th>
+                    <th className="p-3">Activa</th>
+                    <th className="p-3">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {promotions.map((p) => (
+                    <tr key={p.id} className="border-t">
+                      <td className="p-3 font-medium">{p.title}</td>
+                      <td className="p-3">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${p.scope === "global" ? "bg-blue-100 text-blue-800" : "bg-neutral-100 text-neutral-700"}`}>
+                          {p.scope === "global" ? "Global" : "Específica"}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-1">
+                          {p.scope === "global" ? (
+                            <span className="text-neutral-500 text-xs">Todas las activas</span>
+                          ) : p.cafe_names.length === 0 ? (
+                            <span className="text-amber-600 text-xs">Sin asignar</span>
+                          ) : (
+                            p.cafe_names.slice(0, 5).map((n) => (
+                              <span key={n} className="inline-flex rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-xs">
+                                {n}
+                              </span>
+                            ))
+                          )}
+                          {p.scope === "specific" && p.cafe_names.length > 5 && (
+                            <span className="text-neutral-500 text-xs">+{p.cafe_names.length - 5}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <input
+                          type="checkbox"
+                          checked={!!p.is_active}
+                          onChange={async (e) => {
+                            const res = await togglePromotionActive(p.id, e.target.checked);
+                            if (!res.ok) {
+                              notify(`Error: ${res.error}`);
+                              return;
+                            }
+                            setPromotions((prev) => prev.map((x) => (x.id === p.id ? { ...x, is_active: e.target.checked } : x)));
+                            notify("✅ Actualizado");
+                            router.refresh();
+                          }}
+                        />
+                      </td>
+                      <td className="p-3 flex gap-2">
+                        <button
+                          type="button"
+                          className="rounded-lg border px-3 py-1 hover:bg-neutral-50 text-sm font-medium"
+                          onClick={() => {
+                            setPromoToView(p);
+                            setPromoViewOpen(true);
+                          }}
+                        >
+                          Ver
+                        </button>
+                        <button
+                          type="button"
+                          className="border rounded-lg px-3 py-1 hover:bg-neutral-50 text-sm"
+                          onClick={() => {
+                            setPromoModalEditingId(p.id);
+                            setPromoError(null);
+                            setPromoForm({
+                              title: p.title,
+                              subtitle: p.subtitle ?? "",
+                              description: p.description ?? "",
+                              image_url: p.image_url ?? "",
+                              scope: (p.scope === "global" ? "global" : "specific") as "global" | "specific",
+                              cafe_ids: p.cafe_ids ?? [],
+                              start_at: p.start_at ? p.start_at.slice(0, 16) : "",
+                              end_at: p.end_at ? p.end_at.slice(0, 16) : "",
+                            });
+                            setPromoModalOpen(true);
+                          }}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          className="border border-red-200 rounded-lg px-3 py-1 hover:bg-red-50 text-red-700 text-sm"
+                          onClick={async () => {
+                            if (!confirm("¿Eliminar esta promoción?")) return;
+                            const res = await deletePromotion(p.id);
+                            if (!res.ok) {
+                              notify(`Error: ${res.error}`);
+                              return;
+                            }
+                            setPromotions((prev) => prev.filter((x) => x.id !== p.id));
+                            notify("✅ Eliminada");
+                            router.refresh();
+                          }}
+                        >
+                          Eliminar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {promotions.length === 0 && (
+              <p className="text-sm text-neutral-500">No hay promociones. Creá una con el botón superior.</p>
+            )}
+
+            {/* Modal Ver promoción (solo lectura) */}
+            {promoViewOpen && promoToView && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full mx-4 p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                  <div className="text-lg font-semibold">Ver promoción</div>
+                  <Field label="Título">
+                    <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800">{promoToView.title}</div>
+                  </Field>
+                  <Field label="Subtítulo">
+                    <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800">{promoToView.subtitle ?? "—"}</div>
+                  </Field>
+                  <Field label="Descripción">
+                    <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800 min-h-[4rem]">{promoToView.description ?? "—"}</div>
+                  </Field>
+                  <Field label="URL imagen">
+                    <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800 break-all">{promoToView.image_url ?? "—"}</div>
+                  </Field>
+                  <Field label="Alcance">
+                    <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800">
+                      {promoToView.scope === "global" ? "Global" : "Específica"}
+                    </div>
+                  </Field>
+                  <Field label="Cafeterías asignadas">
+                    <div className="flex flex-wrap gap-2 border rounded-lg p-3 bg-neutral-50 min-h-[2.5rem]">
+                      {promoToView.scope === "global" ? (
+                        <span className="text-neutral-600 text-sm">Todas las activas</span>
+                      ) : promoToView.cafe_names?.length ? (
+                        promoToView.cafe_names.map((n) => (
+                          <span key={n} className="inline-flex rounded-full border border-neutral-200 bg-white px-2 py-1 text-xs">
+                            {n}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-neutral-500 text-sm">Sin asignar</span>
+                      )}
+                    </div>
+                  </Field>
+                  <Field label="Inicio">
+                    <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800">
+                      {promoToView.start_at ? new Date(promoToView.start_at).toLocaleString() : "—"}
+                    </div>
+                  </Field>
+                  <Field label="Fin">
+                    <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800">
+                      {promoToView.end_at ? new Date(promoToView.end_at).toLocaleString() : "—"}
+                    </div>
+                  </Field>
+                  <Field label="Activa">
+                    <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800">
+                      {promoToView.is_active ? "Sí" : "No"}
+                    </div>
+                  </Field>
+                  {promoToView.created_at && (
+                    <Field label="Creada">
+                      <div className="w-full border rounded-lg px-3 py-2 bg-neutral-50 text-neutral-800 text-sm">
+                        {new Date(promoToView.created_at).toLocaleString()}
+                      </div>
+                    </Field>
+                  )}
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      className="rounded-lg border px-4 py-2 hover:bg-neutral-50 font-medium"
+                      onClick={() => {
+                        setPromoViewOpen(false);
+                        setPromoToView(null);
+                      }}
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {promoModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full mx-4 p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                  <div className="text-lg font-semibold">{promoModalEditingId ? "Editar promoción" : "Crear promoción"}</div>
+                  {promoError && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                      {promoError}
+                    </div>
+                  )}
+                  <Field label="Título (obligatorio)">
+                    <input
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={promoForm.title}
+                      onChange={(e) => setPromoForm((f) => ({ ...f, title: e.target.value }))}
+                      placeholder="Ej: Desayuno 2x1"
+                    />
+                  </Field>
+                  <Field label="Subtítulo (opcional)">
+                    <input
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={promoForm.subtitle}
+                      onChange={(e) => setPromoForm((f) => ({ ...f, subtitle: e.target.value }))}
+                      placeholder=""
+                    />
+                  </Field>
+                  <Field label="Descripción (opcional)">
+                    <textarea
+                      className="w-full border rounded-lg px-3 py-2"
+                      rows={2}
+                      value={promoForm.description}
+                      onChange={(e) => setPromoForm((f) => ({ ...f, description: e.target.value }))}
+                      placeholder=""
+                    />
+                  </Field>
+                  <Field label="URL imagen (opcional)">
+                    <input
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={promoForm.image_url}
+                      onChange={(e) => setPromoForm((f) => ({ ...f, image_url: e.target.value }))}
+                      placeholder="https://..."
+                    />
+                  </Field>
+                  <Field label="Alcance">
+                    <select
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={promoForm.scope}
+                      onChange={(e) => setPromoForm((f) => ({ ...f, scope: e.target.value as "global" | "specific" }))}
+                    >
+                      <option value="global">Global (todas las cafeterías activas)</option>
+                      <option value="specific">Específica (elegir cafeterías)</option>
+                    </select>
+                  </Field>
+                  {promoForm.scope === "specific" && (
+                    <Field label="Cafeterías (al menos una)">
+                      <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
+                        {cafes.filter((c) => c.is_active !== false).map((c) => (
+                          <label key={c.id} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={promoForm.cafe_ids.includes(c.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setPromoForm((f) => ({ ...f, cafe_ids: [...f.cafe_ids, c.id] }));
+                                } else {
+                                  setPromoForm((f) => ({ ...f, cafe_ids: f.cafe_ids.filter((id) => id !== c.id) }));
+                                }
+                              }}
+                            />
+                            <span>{c.name}</span>
+                          </label>
+                        ))}
+                        {cafes.filter((c) => c.is_active !== false).length === 0 && (
+                          <p className="text-xs text-amber-600">No hay cafeterías activas. Activá al menos una en Cafeterías.</p>
+                        )}
+                      </div>
+                    </Field>
+                  )}
+                  <Field label="Inicio (opcional)">
+                    <input
+                      type="datetime-local"
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={promoForm.start_at}
+                      onChange={(e) => setPromoForm((f) => ({ ...f, start_at: e.target.value }))}
+                    />
+                  </Field>
+                  <Field label="Fin (opcional)">
+                    <input
+                      type="datetime-local"
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={promoForm.end_at}
+                      onChange={(e) => setPromoForm((f) => ({ ...f, end_at: e.target.value }))}
+                    />
+                  </Field>
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      className="rounded-lg bg-black text-white px-4 py-2 disabled:opacity-50"
+                      disabled={promoSubmitting || promoForm.title.trim().length < 2 || (promoForm.scope === "specific" && promoForm.cafe_ids.length < 1)}
+                      onClick={async () => {
+                        setPromoSubmitting(true);
+                        setPromoError(null);
+                        try {
+                          const payload = {
+                            title: promoForm.title.trim(),
+                            subtitle: promoForm.subtitle.trim() || null,
+                            description: promoForm.description.trim() || null,
+                            image_url: promoForm.image_url.trim() || null,
+                            scope: promoForm.scope,
+                            cafe_ids: promoForm.scope === "specific" ? promoForm.cafe_ids : [],
+                            start_at: promoForm.start_at.trim() || null,
+                            end_at: promoForm.end_at.trim() || null,
+                          };
+                          if (promoModalEditingId) {
+                            const res = await updatePromotion(promoModalEditingId, payload);
+                            if (!res.ok) {
+                              setPromoError(res.error);
+                              setPromoSubmitting(false);
+                              return;
+                            }
+                            setPromotions((prev) =>
+                              prev.map((x) => {
+                                if (x.id !== promoModalEditingId) return x;
+                                return {
+                                  ...x,
+                                  ...payload,
+                                  cafe_ids: payload.cafe_ids,
+                                  cafe_names: payload.scope === "global"
+                                    ? cafes.filter((c) => c.is_active !== false).map((c) => c.name)
+                                    : payload.cafe_ids.map((id) => cafes.find((c) => c.id === id)?.name ?? id),
+                                };
+                              })
+                            );
+                          } else {
+                            const res = await createPromotion(payload);
+                            if (!res.ok) {
+                              setPromoError(res.error);
+                              setPromoSubmitting(false);
+                              return;
+                            }
+                            const newRow: PromotionRow = {
+                              id: (res as { id: string }).id,
+                              title: payload.title,
+                              subtitle: payload.subtitle,
+                              description: payload.description,
+                              image_url: payload.image_url,
+                              is_active: true,
+                              scope: payload.scope,
+                              start_at: payload.start_at,
+                              end_at: payload.end_at,
+                              created_at: new Date().toISOString(),
+                              cafe_ids: payload.cafe_ids,
+                              cafe_names:
+                                payload.scope === "global"
+                                  ? cafes.filter((c) => c.is_active !== false).map((c) => c.name)
+                                  : payload.cafe_ids.map((id) => cafes.find((c) => c.id === id)?.name ?? id),
+                            };
+                            setPromotions((prev) => [newRow, ...prev]);
+                          }
+                          notify("✅ Guardado");
+                          setPromoModalOpen(false);
+                          setPromoForm(emptyPromoForm());
+                          setPromoModalEditingId(null);
+                          router.refresh();
+                        } catch (err) {
+                          setPromoError(err instanceof Error ? err.message : "Error al guardar");
+                        } finally {
+                          setPromoSubmitting(false);
+                        }
+                      }}
+                    >
+                      {promoSubmitting ? "Guardando…" : "Guardar"}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border px-4 py-2 hover:bg-neutral-50 disabled:opacity-50"
+                      disabled={promoSubmitting}
+                      onClick={() => {
+                        if (promoSubmitting) return;
+                        setPromoModalOpen(false);
+                        setPromoError(null);
+                        setPromoForm(emptyPromoForm());
+                        setPromoModalEditingId(null);
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

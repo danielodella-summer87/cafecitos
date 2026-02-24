@@ -3,14 +3,19 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, CardTitle, CardSubtitle } from "@/app/ui/components";
-import { createCafe, updateCafe } from "@/app/actions/cafes";
+import { createCafe, updateCafe, lookupProfileByCedula } from "@/app/actions/cafes";
 
 type Staff = {
-  name: string;
-  role: string;
+  cedula: string;
+  profile_id: string | null;
+  full_name: string;
+  role: "admin" | "staff";
+  confirmed: boolean;
 };
 
 type CafeFormMode = "create" | "edit";
+
+const STAFF_ROLES = ["staff", "admin"] as const;
 
 type InitialValues = {
   id?: string;
@@ -26,13 +31,17 @@ type InitialValues = {
   is_active?: boolean;
   lat?: string | number | null;
   lng?: string | number | null;
-  staff?: Staff[];
+  staff?: Array<{ name: string; role: string; profile_id?: string | null }>;
 };
 
 function pad2(s: string): string {
   const n = parseInt(s, 10);
   if (Number.isNaN(n)) return "01";
   return String(Math.max(1, Math.min(99, n))).padStart(2, "0");
+}
+
+function emptyStaffRow(): Staff {
+  return { cedula: "", profile_id: null, full_name: "", role: "staff", confirmed: false };
 }
 
 export default function CafeForm({
@@ -69,22 +78,88 @@ export default function CafeForm({
   const [hoursText, setHoursText] = useState(initialValues?.hours_text ?? "");
   const [description, setDescription] = useState(initialValues?.description ?? "");
 
-  const [staff, setStaff] = useState<Staff[]>(
-    initialValues?.staff?.length ? initialValues.staff : [{ name: "", role: "Dueño/a" }]
-  );
+  const [staff, setStaff] = useState<Staff[]>(() => {
+    if (initialValues?.staff?.length) {
+      return initialValues.staff.map((s) => ({
+        cedula: "",
+        profile_id: s.profile_id ?? null,
+        full_name: s.name ?? "",
+        role: (s.role === "admin" ? "admin" : "staff") as "admin" | "staff",
+        confirmed: true,
+      }));
+    }
+    return [emptyStaffRow()];
+  });
+  const [lookupLoadingIdx, setLookupLoadingIdx] = useState<number | null>(null);
 
-  const canSave = name.trim().length >= 5 && !loading;
+  const staffIncomplete = staff.some(
+    (s) =>
+      ((s.cedula.trim() || s.full_name.trim()) && !s.profile_id) ||
+      (s.profile_id && !s.confirmed)
+  );
+  const canSave = name.trim().length >= 5 && !loading && !staffIncomplete;
   const primaryLabel = mode === "edit" ? "Guardar cambios" : "Guardar cafetería";
 
-  function updateStaff(idx: number, field: keyof Staff, value: string) {
+  function updateStaff(idx: number, field: keyof Staff, value: string | boolean) {
     const copy = [...staff];
     copy[idx] = { ...copy[idx], [field]: value };
     setStaff(copy);
   }
 
+  async function handleLookup(idx: number) {
+    const cedula = (staff[idx]?.cedula ?? "").replace(/\D/g, "").trim();
+    if (cedula.length !== 8) return;
+    setLookupLoadingIdx(idx);
+    setError(null);
+    try {
+      const profile = await lookupProfileByCedula(cedula);
+      if (!profile) {
+        setError("No se encontró usuario con esa cédula.");
+        return;
+      }
+      const copy = [...staff];
+      copy[idx] = {
+        ...copy[idx],
+        full_name: profile.full_name ?? "",
+        profile_id: profile.id,
+        cedula,
+        confirmed: false,
+      };
+      setStaff(copy);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al buscar");
+    } finally {
+      setLookupLoadingIdx(null);
+    }
+  }
+
+  function handleConfirm(idx: number) {
+    const copy = [...staff];
+    copy[idx] = { ...copy[idx], confirmed: true };
+    const confirmedCount = copy.filter((s) => s.confirmed).length;
+    const lastRow = copy[copy.length - 1];
+    const hasEmptyAtEnd =
+      lastRow &&
+      !lastRow.cedula.trim() &&
+      !lastRow.profile_id &&
+      !lastRow.full_name.trim() &&
+      !lastRow.confirmed;
+    if (confirmedCount < 5 && !hasEmptyAtEnd) {
+      setStaff([...copy, emptyStaffRow()]);
+    } else {
+      setStaff(copy);
+    }
+  }
+
+  function removeStaff(idx: number) {
+    const next = staff.filter((_, i) => i !== idx);
+    if (next.length === 0) next.push(emptyStaffRow());
+    setStaff(next);
+  }
+
   function addStaff() {
     if (staff.length >= 5) return;
-    setStaff([...staff, { name: "", role: "Staff" }]);
+    setStaff([...staff, emptyStaffRow()]);
   }
 
   function parseLatLng(): { lat: number | null; lng: number | null; error?: string } {
@@ -111,11 +186,11 @@ export default function CafeForm({
     try {
       const code = pad2(initialCode);
       const staffPayload = staff
-        .filter((s) => s.name.trim() && s.role.trim())
-        .map((s, idx) => ({
-          name: s.name.trim(),
-          role: idx === 0 ? "Dueño/a" : s.role.trim(),
-          is_owner: idx === 0,
+        .filter((s) => s.profile_id && s.confirmed && s.full_name.trim() && s.role.trim())
+        .map((s) => ({
+          name: s.full_name.trim(),
+          role: STAFF_ROLES.includes(s.role.trim().toLowerCase() as "staff" | "admin") ? s.role.trim().toLowerCase() : "staff",
+          profile_id: s.profile_id!,
         }));
 
       if (mode === "edit" && initialValues?.id) {
@@ -145,7 +220,7 @@ export default function CafeForm({
           image_code: code,
           lat: latVal,
           lng: lngVal,
-          staff: staffPayload,
+          staff: staffPayload.map((p) => ({ name: p.name, role: p.role, profile_id: p.profile_id })),
         });
         onSave(cafe);
         router.push(`/app/admin/cafes/${cafe.id}`);
@@ -236,22 +311,70 @@ export default function CafeForm({
 
       <div className="space-y-2">
         <CardTitle>Personas autorizadas</CardTitle>
+        <p className="text-xs text-neutral-500">Solo admin o staff. Buscá por cédula → Confirmar/Agregar. Owner se crea en Owners.</p>
+        {staffIncomplete && (
+          <p className="text-sm text-amber-700">Completá cada persona: Cédula + Buscar, luego Agregar. Todas las filas con usuario deben estar confirmadas.</p>
+        )}
         {staff.map((s, idx) => (
-          <div key={idx} className="grid grid-cols-2 gap-2">
-            <input
-              className="input"
-              placeholder="Nombre"
-              value={s.name}
-              onChange={(e) => updateStaff(idx, "name", e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder={idx === 0 ? "Dueño/a (fijo)" : "Rol (Barista, Cajero...)"}
-              value={s.role}
-              onChange={(e) => updateStaff(idx, "role", e.target.value)}
-              readOnly={idx === 0}
-              disabled={idx === 0}
-            />
+          <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-2 border rounded-lg p-2 bg-neutral-50/50">
+            <div className="flex gap-2 items-center flex-wrap">
+              <input
+                className="input flex-1 min-w-0"
+                placeholder="Cédula (8 dígitos)"
+                value={s.cedula}
+                onChange={(e) => updateStaff(idx, "cedula", e.target.value.replace(/\D/g, "").slice(0, 8))}
+                maxLength={8}
+                inputMode="numeric"
+                readOnly={!!s.profile_id}
+              />
+              {!s.profile_id ? (
+                <Button
+                  variant="secondary"
+                  type="button"
+                  disabled={lookupLoadingIdx !== null || s.cedula.replace(/\D/g, "").length !== 8}
+                  onClick={() => handleLookup(idx)}
+                >
+                  {lookupLoadingIdx === idx ? "…" : "Buscar"}
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="primary"
+                    type="button"
+                    disabled={s.confirmed}
+                    onClick={() => handleConfirm(idx)}
+                  >
+                    {s.confirmed ? "✓ Agregado" : "Agregar"}
+                  </Button>
+                </>
+              )}
+              <Button
+                variant="ghost"
+                type="button"
+                className="text-red-600 hover:text-red-700"
+                onClick={() => removeStaff(idx)}
+              >
+                Quitar
+              </Button>
+            </div>
+            <div className="flex gap-2 items-center">
+              <input
+                className="input flex-1"
+                placeholder="Nombre (se completa al buscar)"
+                value={s.full_name}
+                readOnly
+                aria-readonly
+              />
+              <select
+                className="input w-28"
+                value={s.role}
+                onChange={(e) => updateStaff(idx, "role", e.target.value === "admin" ? "admin" : "staff")}
+              >
+                {STAFF_ROLES.map((r) => (
+                  <option key={r} value={r}>{r === "admin" ? "Admin" : "Staff"}</option>
+                ))}
+              </select>
+            </div>
           </div>
         ))}
         {staff.length < 5 && (

@@ -45,29 +45,28 @@ export default async function EditCafePage({ params }: Props) {
 
   const { data: staff, error: staffErr } = await supabase
     .from("cafe_staff")
-    .select("id, cafe_id, full_name, role, is_owner")
+    .select("id, cafe_id, full_name, name, role, profile_id")
     .eq("cafe_id", id)
-    .order("is_owner", { ascending: false });
+    .order("role", { ascending: true });
 
-  let safeStaff: { id?: string; name: string; role: string; is_owner: boolean }[];
+  let safeStaff: { id?: string; name: string; role: string; profile_id?: string | null }[];
   if (staffErr) {
     const { data: staffAlt } = await supabase
       .from("cafe_staff")
-      .select("id, cafe_id, name, role, is_owner")
-      .eq("cafe_id", id)
-      .order("is_owner", { ascending: false });
-    safeStaff = (staffAlt ?? []).map((p: { id?: string; name?: string | null; role?: string | null; is_owner?: boolean }) => ({
+      .select("id, cafe_id, name, role, profile_id")
+      .eq("cafe_id", id);
+    safeStaff = (staffAlt ?? []).map((p: { id?: string; name?: string | null; role?: string | null; profile_id?: string | null }) => ({
       id: p.id,
       name: (p.name ?? "").toString(),
-      role: (p.role ?? "").toString(),
-      is_owner: !!p.is_owner,
+      role: (p.role ?? "").toString() || "staff",
+      profile_id: p.profile_id ?? null,
     }));
   } else {
-    safeStaff = (staff ?? []).map((p: { id?: string; full_name?: string | null; role?: string | null; is_owner?: boolean }) => ({
+    safeStaff = (staff ?? []).map((p: { id?: string; full_name?: string | null; name?: string | null; role?: string | null; profile_id?: string | null }) => ({
       id: p.id,
-      name: (p.full_name ?? "").toString(),
-      role: (p.role ?? "").toString(),
-      is_owner: !!p.is_owner,
+      name: (p.full_name ?? p.name ?? "").toString(),
+      role: (p.role ?? "").toString() || "staff",
+      profile_id: p.profile_id ?? null,
     }));
   }
 
@@ -90,8 +89,6 @@ export default async function EditCafePage({ params }: Props) {
         lng: cafe.lng != null && typeof cafe.lng === "number" ? cafe.lng : null,
       }}
       staff={safeStaff}
-      debugRole={session.role}
-      debugCafeId={id}
     />
   );
 }

@@ -1,7 +1,7 @@
 "use server";
 
-import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { hashPin } from "@/lib/security/pin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
 
@@ -41,7 +41,7 @@ export async function createOwnerAndCafe(input: {
   if (cafeErr || !cafe) return { ok: false, error: cafeErr?.message ?? "No se pudo crear la cafetería" };
 
   // 2) Crear owner + vincularlo al café
-  const pin_hash = bcrypt.hashSync(parsed.data.ownerPin, 10);
+  const pin_hash = await hashPin(parsed.data.ownerPin);
 
   const { error: ownerErr } = await supabase.from("profiles").insert({
     role: "owner",

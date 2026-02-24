@@ -6,6 +6,7 @@ import { ownerGetConsumerSummary } from "@/app/actions/ownerSummary";
 import { ownerAddCafecitos } from "@/app/actions/owner";
 import { ownerRedeemCafecitos } from "@/app/actions/ownerRedeem";
 import { logout } from "@/app/actions/auth";
+import { clearModeAndGoToChooseMode } from "@/app/app/choose-mode/actions";
 import { isValidCi, normalizeCi } from "@/lib/ci";
 import { PRO } from "@/lib/ui/pro";
 
@@ -158,13 +159,23 @@ export default function StaffPanelClient({ canIssue, canRedeem, isInactive = fal
               — {staffName ?? "—"} | {cafeName ?? "—"}
             </span>
           </h1>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="rounded-lg px-4 py-2 border border-neutral-300 bg-white hover:bg-neutral-100 text-sm font-medium"
-          >
-            Salir
-          </button>
+          <div className="flex gap-2">
+            <form action={clearModeAndGoToChooseMode}>
+              <button
+                type="submit"
+                className="rounded-lg px-4 py-2 border border-neutral-300 bg-white hover:bg-neutral-100 text-sm font-medium"
+              >
+                Cambiar modo
+              </button>
+            </form>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-lg px-4 py-2 border border-neutral-300 bg-white hover:bg-neutral-100 text-sm font-medium"
+            >
+              Salir
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -179,13 +190,23 @@ export default function StaffPanelClient({ canIssue, canRedeem, isInactive = fal
             — {staffName ?? "—"} | {cafeName ?? "—"}
           </span>
         </h1>
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="rounded-lg px-4 py-2 border border-neutral-300 bg-white hover:bg-neutral-100 text-sm font-medium"
-        >
-          Salir
-        </button>
+        <div className="flex gap-2">
+          <form action={clearModeAndGoToChooseMode}>
+            <button
+              type="submit"
+              className="rounded-lg px-4 py-2 border border-neutral-300 bg-white hover:bg-neutral-100 text-sm font-medium"
+            >
+              Cambiar modo
+            </button>
+          </form>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="rounded-lg px-4 py-2 border border-neutral-300 bg-white hover:bg-neutral-100 text-sm font-medium"
+          >
+            Salir
+          </button>
+        </div>
       </div>
 
       <p className="text-sm text-neutral-600 mb-4">Buscar cliente por cédula. Luego podés sumar o canjear cafecitos según tus permisos.</p>

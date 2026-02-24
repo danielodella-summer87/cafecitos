@@ -13,6 +13,7 @@ import {
   adminRecalcCafeTiers,
   adminGetOwnerCafesWithTiers,
 } from "@/app/actions/adminPro";
+import { getPromotionsForAdmin } from "@/app/actions/adminPromotions";
 
 export default async function AdminPage() {
   const session = await getSession();
@@ -21,13 +22,14 @@ export default async function AdminPage() {
 
   await adminRecalcCafeTiers();
 
-  const [settingsRes, tiersRes, rewardsRes, profilesRes, cafesRes, ownerCafesRes] = await Promise.all([
+  const [settingsRes, tiersRes, rewardsRes, profilesRes, cafesRes, ownerCafesRes, promotionsList] = await Promise.all([
     adminGetSettings(),
     adminListTiers(),
     adminListRewards(),
     adminListProfiles(),
     adminListCafes(),
     adminGetOwnerCafesWithTiers(),
+    getPromotionsForAdmin().catch(() => []),
   ]);
 
   const serverErrors: string[] = [];
@@ -70,6 +72,7 @@ export default async function AdminPage() {
           : []
       }
       initialOwnerCafes={ownerCafesMap}
+      initialPromotions={Array.isArray(promotionsList) ? promotionsList : []}
       serverErrors={serverErrors}
     />
   );
