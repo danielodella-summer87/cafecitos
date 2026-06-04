@@ -1,20 +1,20 @@
 drop extension if exists "pg_net";
 
-alter table "public"."cafe_reviews" drop constraint "cafe_reviews_cafe_id_profile_id_key";
+alter table "public"."cafe_reviews" drop constraint if exists "cafe_reviews_cafe_id_profile_id_key";
 
-alter table "public"."cafe_reviews" drop constraint "cafe_reviews_rating_check";
+alter table "public"."cafe_reviews" drop constraint if exists "cafe_reviews_rating_check";
 
-alter table "public"."cafe_staff" drop constraint "cafe_staff_cedula_pin_check";
+alter table "public"."cafe_staff" drop constraint if exists "cafe_staff_cedula_pin_check";
 
-alter table "public"."cafe_staff" drop constraint "cafe_staff_pin_hash_len_chk";
+alter table "public"."cafe_staff" drop constraint if exists "cafe_staff_pin_hash_len_chk";
 
-alter table "public"."point_transactions" drop constraint "point_transactions_actor_staff_id_fkey";
+alter table "public"."point_transactions" drop constraint if exists "point_transactions_actor_staff_id_fkey";
 
-alter table "public"."rewards" drop constraint "rewards_cafe_id_fkey";
+alter table "public"."rewards" drop constraint if exists "rewards_cafe_id_fkey";
 
-alter table "public"."settings_global" drop constraint "settings_global_singleton";
+alter table "public"."settings_global" drop constraint if exists "settings_global_singleton";
 
-alter table "public"."cafes" drop constraint "cafes_cafe_tier_id_fkey";
+alter table "public"."cafes" drop constraint if exists "cafes_cafe_tier_id_fkey";
 
 drop function if exists "public"."create_staff_with_profile"(p_cafe_id uuid, p_full_name text, p_role text, p_cedula text, p_pin_hash text, p_can_issue boolean, p_can_redeem boolean, p_is_active boolean, p_display_role text);
 
@@ -28,7 +28,7 @@ drop view if exists "public"."v_cafe_reviews_stats";
 
 drop view if exists "public"."v_panel_clientes_global";
 
-alter table "public"."cafe_promos" drop constraint "cafe_promos_pkey";
+alter table "public"."cafe_promos" drop constraint if exists "cafe_promos_pkey";
 
 drop index if exists "public"."cafe_reviews_cafe_id_profile_id_key";
 
@@ -59,13 +59,13 @@ drop index if exists "public"."cafes_image_code_unique";
       );
 
 
-alter table "public"."cafe_promos" drop column "description";
+alter table "public"."cafe_promos" drop column if exists "description";
 
-alter table "public"."cafe_promos" drop column "id";
+alter table "public"."cafe_promos" drop column if exists "id";
 
-alter table "public"."cafe_promos" drop column "image_code";
+alter table "public"."cafe_promos" drop column if exists "image_code";
 
-alter table "public"."cafe_promos" drop column "title";
+alter table "public"."cafe_promos" drop column if exists "title";
 
 alter table "public"."cafe_promos" add column "promo_id" uuid not null;
 
@@ -81,27 +81,29 @@ alter table "public"."cafe_staff" add column "display_role" text;
 
 alter table "public"."cafe_staff" alter column "created_at" set not null;
 
+alter table "public"."cafe_staff" add column if not exists "full_name" text;
+
 alter table "public"."cafe_staff" alter column "full_name" set not null;
 
 alter table "public"."cafe_staff" alter column "name" drop not null;
 
 alter table "public"."cafe_staff" alter column "role" set default 'STAFF'::text;
 
-alter table "public"."cafes" drop column "geocode_query";
+alter table "public"."cafes" drop column if exists "geocode_query";
 
-alter table "public"."cafes" drop column "geocode_source";
+alter table "public"."cafes" drop column if exists "geocode_source";
 
-alter table "public"."cafes" drop column "geocoded_at";
+alter table "public"."cafes" drop column if exists "geocoded_at";
 
-alter table "public"."cafes" drop column "lat";
+alter table "public"."cafes" drop column if exists "lat";
 
-alter table "public"."cafes" drop column "lng";
+alter table "public"."cafes" drop column if exists "lng";
 
 alter table "public"."cafes" add column "updated_at" timestamp with time zone not null default now();
 
 alter table "public"."cafes" alter column "name" drop not null;
 
-alter table "public"."point_transactions" drop column "actor_staff_id";
+alter table "public"."point_transactions" drop column if exists "actor_staff_id";
 
 alter table "public"."profiles" add column "cafe_id" uuid;
 
@@ -119,7 +121,7 @@ alter table "public"."rewards" alter column "is_active" drop not null;
 
 alter table "public"."rewards" alter column "is_global" drop not null;
 
-alter table "public"."settings_global" drop column "created_at";
+alter table "public"."settings_global" drop column if exists "created_at";
 
 alter table "public"."settings_global" alter column "max_points_per_day" set default 0;
 
@@ -141,11 +143,11 @@ alter table "public"."settings_global" alter column "updated_at" drop not null;
 
 alter table "public"."settings_global" alter column "welcome_bonus_points" drop not null;
 
-alter table "public"."tiers" drop column "badge_bg";
+alter table "public"."tiers" drop column if exists "badge_bg";
 
-alter table "public"."tiers" drop column "badge_fg";
+alter table "public"."tiers" drop column if exists "badge_fg";
 
-alter table "public"."tiers" drop column "created_at";
+alter table "public"."tiers" drop column if exists "created_at";
 
 alter table "public"."tiers" alter column "badge_text" drop default;
 
@@ -164,6 +166,8 @@ alter table "public"."tiers" alter column "sort_order" drop not null;
 CREATE UNIQUE INDEX cafe_reviews_unique_user_cafe ON public.cafe_reviews USING btree (cafe_id, profile_id);
 
 CREATE INDEX cafe_staff_cafe_id_idx ON public.cafe_staff USING btree (cafe_id);
+
+alter table "public"."cafe_staff" add column if not exists "profile_id" uuid;
 
 CREATE UNIQUE INDEX cafe_staff_cafe_profile_unique ON public.cafe_staff USING btree (cafe_id, profile_id);
 
@@ -339,6 +343,14 @@ begin
 end;
 $function$
 ;
+
+alter table "public"."cafe_staff" add column if not exists "is_owner" boolean not null default false;
+
+alter table "public"."cafe_staff" add column if not exists "is_active" boolean not null default true;
+
+alter table "public"."cafe_staff" add column if not exists "can_issue" boolean not null default true;
+
+alter table "public"."cafe_staff" add column if not exists "can_redeem" boolean not null default true;
 
 create or replace view "public"."v_cafe_staff_list" as  SELECT cs.id AS cafe_staff_id,
     cs.cafe_id,
