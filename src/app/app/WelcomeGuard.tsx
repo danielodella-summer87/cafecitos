@@ -50,7 +50,11 @@ export default function WelcomeGuard({
     <>
       {children}
 
-      {isRedirecting ? (
+      {/* Defensivo: el overlay solo se muestra mientras realmente corresponde
+          redirigir a bienvenida. Así nunca queda "Cargando…" pegado en
+          /app/consumer si shouldShowWelcome se vuelve false (p. ej. tras
+          marcar la bienvenida y recargar el layout). */}
+      {isRedirecting && shouldShowWelcome && pathname !== "/app/bienvenida" ? (
         <div className="fixed inset-0 z-[9999] bg-white flex items-center justify-center">
           <div className="text-sm text-neutral-600">Cargando…</div>
         </div>

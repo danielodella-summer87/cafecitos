@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { markWelcomeSeen } from "@/app/actions/onboarding";
 import { AppMark } from "@/components/brand/AppMark";
 
 export default function BienvenidaClient() {
-  const router = useRouter();
   const [status, setStatus] = useState<"saving" | "ready">("saving");
 
   useEffect(() => {
@@ -42,7 +40,11 @@ export default function BienvenidaClient() {
     } catch (_) {
       // continue anyway so user isn't stuck
     }
-    router.replace("/app/consumer");
+    // Navegación dura: fuerza re-render del layout /app con welcome_seen_at ya
+    // seteado, evitando el shouldShowWelcome stale del WelcomeGuard (overlay
+    // "Cargando…" permanente). No usamos router.replace porque en navegación
+    // cliente el layout compartido no se recalcula de inmediato.
+    window.location.assign("/app/consumer");
   };
 
   return (
