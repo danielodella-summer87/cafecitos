@@ -248,6 +248,7 @@ export default function AdminPanelClient(props: Props) {
           <button className={`px-4 py-2 rounded-md border ${tab === "profiles" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("profiles")}>Clientes</button>
           <button className={`px-4 py-2 rounded-md border ${tab === "owners" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("owners")}>Owners</button>
           <button className={`px-4 py-2 rounded-md border ${tab === "promotions" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("promotions")}>Promociones</button>
+          <button className={`px-4 py-2 rounded-md border ${tab === "rewards" ? "bg-black text-white" : "bg-white"}`} onClick={() => setTab("rewards")}>Beneficios</button>
           <Link href="/app/admin/cafes" className="px-4 py-2 rounded-md border bg-white hover:bg-neutral-50 text-neutral-700 no-underline">
             Cafeterías
           </Link>
