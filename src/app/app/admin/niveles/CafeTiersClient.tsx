@@ -6,6 +6,7 @@ import {
   upsertAdminCafeTier,
   deleteAdminCafeTier,
 } from "@/app/actions/adminCafeTiers";
+import { adminRecalcCafeTiers } from "@/app/actions/adminPro";
 
 type Props = { initial: CafeTierRow[] };
 
@@ -14,6 +15,7 @@ export default function CafeTiersClient({ initial }: Props) {
   const [isPending, startTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
   const sorted = useMemo(() => {
     return [...rows].sort((a, b) => (a.min_total_points ?? 0) - (b.min_total_points ?? 0));
@@ -53,6 +55,26 @@ export default function CafeTiersClient({ initial }: Props) {
     });
   };
 
+  // Recálculo manual de niveles de cafeterías (antes corría en cada carga de /app/admin).
+  const onRecalc = async () => {
+    setSaveError(null);
+    setToast(null);
+    setIsRecalculating(true);
+    try {
+      const result = await adminRecalcCafeTiers();
+      if (!result.ok) {
+        setSaveError(result.error);
+        return;
+      }
+      setToast("Niveles de cafeterías recalculados ✅");
+      setTimeout(() => setToast(null), 2500);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Error al recalcular niveles de cafeterías");
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
+
   const onAddDefault = () => {
     const nowId = crypto.randomUUID();
     setRows((prev) => [
@@ -87,14 +109,25 @@ export default function CafeTiersClient({ initial }: Props) {
             Ej: Bronce / Plata / Oro / Platinum (según puntos totales generados en esa cafetería).
           </p>
         </div>
-        <button
-          type="button"
-          className="border rounded px-3 py-2 hover:bg-gray-50"
-          onClick={onAddDefault}
-          disabled={isPending}
-        >
-          + Agregar nivel cafetería
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="border rounded px-3 py-2 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={onRecalc}
+            disabled={isRecalculating || isPending}
+            title="Acción manual: recalcula el nivel de cada cafetería según sus puntos totales."
+          >
+            {isRecalculating ? "Recalculando…" : "Recalcular niveles de cafeterías"}
+          </button>
+          <button
+            type="button"
+            className="border rounded px-3 py-2 hover:bg-gray-50"
+            onClick={onAddDefault}
+            disabled={isPending}
+          >
+            + Agregar nivel cafetería
+          </button>
+        </div>
       </div>
 
       <div className="overflow-auto border rounded-xl">
