@@ -10,7 +10,6 @@ import {
   adminListRewards,
   adminListProfiles,
   adminListCafes,
-  adminRecalcCafeTiers,
   adminGetOwnerCafesWithTiers,
 } from "@/app/actions/adminPro";
 import { getPromotionsForAdmin } from "@/app/actions/adminPromotions";
@@ -19,8 +18,6 @@ export default async function AdminPage() {
   const session = await getSession();
   if (!session) redirect("/login");
   if (session.role !== "admin") redirect("/login");
-
-  await adminRecalcCafeTiers();
 
   const [settingsRes, tiersRes, rewardsRes, profilesRes, cafesRes, ownerCafesRes, promotionsList] = await Promise.all([
     adminGetSettings(),
