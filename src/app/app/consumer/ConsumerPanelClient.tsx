@@ -8,7 +8,10 @@ import { Gift, ChevronDown } from "lucide-react";
 import { logout } from "@/app/actions/logout";
 import { clearModeAndGoToChooseMode } from "@/app/app/choose-mode/actions";
 import type { ConsumerSummaryResult, ConsumerTx, CafeMapItem, ConsumerPromoItem } from "@/app/actions/consumerSummary";
-import { redeemWelcomeGift } from "@/app/actions/consumerSummary";
+import {
+  buildCafecitosWhatsAppUrl,
+  WELCOME_GIFT_WHATSAPP_MESSAGE,
+} from "@/lib/cafecitosWhatsApp";
 import type { CafeListItem } from "@/app/actions/cafes";
 import type { CoffeeGuide } from "@/app/actions/coffeeGuides";
 import { getClientTiersForDisplay, type TierRow } from "@/app/actions/adminReports";
@@ -87,10 +90,7 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
     }
   }, [cafesList]);
 
-  const [welcomeCode, setWelcomeCode] = useState("");
-  const [welcomeLoading, setWelcomeLoading] = useState(false);
-  const [welcomeError, setWelcomeError] = useState<string | null>(null);
-  const [justRedeemed, setJustRedeemed] = useState(false);
+  const welcomeGiftWhatsAppUrl = buildCafecitosWhatsAppUrl(WELCOME_GIFT_WHATSAPP_MESSAGE);
 
   const { currentTier, nextTier, remaining: nextTierRemaining } = getTierByPoints(clientTiers, balance);
   const tierDisplayName = currentTier?.name ?? "—";
@@ -162,33 +162,12 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
         />
         <p className="text-sm md:text-base text-slate-600 mt-1 mb-4">{greeting}</p>
 
-        {justRedeemed && (
-          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
-            <p className="font-medium text-green-800">¡Regalo activado! Sumamos 10 cafecitos a tu cuenta.</p>
-            <p className="mt-2 text-sm text-green-700">Explorá promociones y cafeterías:</p>
-            <div className="mt-3 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => document.getElementById("seccion-promociones")?.scrollIntoView({ behavior: "smooth" })}
-                className="rounded-xl bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700"
-              >
-                Ver promociones
-              </button>
-              <button
-                type="button"
-                onClick={() => document.getElementById("seccion-explorar")?.scrollIntoView({ behavior: "smooth" })}
-                className="rounded-xl bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700"
-              >
-                Explorar cafeterías
-              </button>
-            </div>
-          </div>
-        )}
-
-        {data.session.role === "consumer" && !welcomeGiftRedeemed && !justRedeemed && (
+        {data.session.role === "consumer" && !welcomeGiftRedeemed && (
           <Card className="mb-6 !bg-[#F6EFE6]">
             <CardTitle>Activar regalo de bienvenida</CardTitle>
-            <CardSubtitle>Código recibido por WhatsApp (4 dígitos)</CardSubtitle>
+            <CardSubtitle>
+              Para activar tu regalo, escribinos por WhatsApp desde el número que registraste en la app.
+            </CardSubtitle>
             <Image
               src="/images/amor-perfecto-bolsa-250g.png"
               alt="Bolsa de café Amor Perfecto 250g"
@@ -197,46 +176,18 @@ export default function ConsumerPanelClient({ data, cafesList, guidesPreview = [
               className="mt-3 w-full max-w-[240px] mx-auto rounded-xl shadow-sm"
               priority
             />
-            <form
-              className="mt-4 flex flex-wrap items-end gap-3"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setWelcomeError(null);
-                setWelcomeLoading(true);
-                const res = await redeemWelcomeGift(welcomeCode);
-                setWelcomeLoading(false);
-                if (res.ok) {
-                  setJustRedeemed(true);
-                  setWelcomeCode("");
-                  router.refresh();
-                } else {
-                  setWelcomeError(res.message);
-                }
-              }}
+            <p className="mt-4 text-sm text-slate-600">
+              Se abrirá WhatsApp con un mensaje listo para enviar.
+            </p>
+            <a
+              href={welcomeGiftWhatsAppUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center justify-center gap-2 rounded-[0.75rem] border border-red-600 bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700 active:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2"
             >
-              <div className="flex-1 min-w-[120px]">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={4}
-                  placeholder="0000"
-                  value={welcomeCode}
-                  onChange={(e) => setWelcomeCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 outline-none focus:ring-2 focus:ring-red-500/40"
-                  aria-label="Código recibido por WhatsApp (4 dígitos)"
-                />
-              </div>
-              <Button
-                type="submit"
-                variant="danger"
-                disabled={welcomeLoading || welcomeCode.length !== 4}
-                className="inline-flex items-center justify-center gap-2"
-              >
-                <Gift className="h-4 w-4 text-white" />
-                {welcomeLoading ? "Activando…" : "Activar"}
-              </Button>
-            </form>
-            {welcomeError && <p className="mt-2 text-sm text-red-600">{welcomeError}</p>}
+              <Gift className="h-4 w-4 text-white" aria-hidden />
+              Solicitar regalo por WhatsApp
+            </a>
           </Card>
         )}
 

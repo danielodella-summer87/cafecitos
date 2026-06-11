@@ -1,11 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Gift } from "lucide-react";
 import { markWelcomeSeen } from "@/app/actions/onboarding";
 import { AppMark } from "@/components/brand/AppMark";
+import {
+  buildCafecitosWhatsAppUrl,
+  WELCOME_GIFT_WHATSAPP_MESSAGE,
+} from "@/lib/cafecitosWhatsApp";
 
 export default function BienvenidaClient() {
   const [status, setStatus] = useState<"saving" | "ready">("saving");
+  const welcomeGiftWhatsAppUrl = buildCafecitosWhatsAppUrl(WELCOME_GIFT_WHATSAPP_MESSAGE);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,12 +60,20 @@ export default function BienvenidaClient() {
 
       <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
         <p className="text-neutral-800">
-          ¡Listo! En breve te enviaremos un WhatsApp con un código para obtener un primer regalo de AmorPerfecto: un
-          paquete de café y la acreditación de tus primeros cafecitos.
+          Para activar tu regalo de bienvenida, escribinos por WhatsApp desde el número que registraste.
         </p>
         <p className="mt-3 text-sm text-neutral-700">
-          Te llegará por WhatsApp. Si no lo recibís en 2 minutos, pedile a la cafetería que lo reenvíe.
+          Se abrirá WhatsApp con un mensaje listo para enviar.
         </p>
+        <a
+          href={welcomeGiftWhatsAppUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl border border-red-600 bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700 active:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2"
+        >
+          <Gift className="h-4 w-4 text-white" aria-hidden />
+          Solicitar regalo por WhatsApp
+        </a>
       </div>
 
       <div className="mt-8 space-y-4">
