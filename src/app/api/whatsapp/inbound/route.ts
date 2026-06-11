@@ -1,13 +1,11 @@
 import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
-import { normalizeUyMobilePhone } from "@/lib/phone/uy";
 import { TWIML_CONTENT_TYPE, twimlMessage } from "@/lib/twilio/twiml";
-
-const ACK_VALID_PHONE =
-  "Hola, recibimos tu mensaje en Cafecitos ✅ En breve te confirmamos tu regalo de bienvenida.";
-
-const ACK_INVALID_PHONE =
-  "Recibimos tu mensaje, pero no pudimos validar el número de WhatsApp. Por favor escribinos desde el teléfono registrado en Cafecitos.";
+import {
+  isWelcomeGiftIntent,
+  processInboundMessagePhase2,
+  twimlReplyForAction,
+} from "@/lib/whatsapp/inboundPhase2";
 
 function formString(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value : "";
@@ -33,6 +31,14 @@ function validateWebhookToken(req: Request): { ok: true } | { ok: false; respons
   return { ok: true };
 }
 
+function formDataToRecord(form: FormData): Record<string, string> {
+  const out: Record<string, string> = {};
+  form.forEach((value, key) => {
+    if (typeof value === "string") out[key] = value;
+  });
+  return out;
+}
+
 export async function POST(req: Request) {
   const auth = validateWebhookToken(req);
   if (!auth.ok) return auth.response;
@@ -45,10 +51,38 @@ export async function POST(req: Request) {
   const waId = formString(form.get("WaId"));
   const messageSid = formString(form.get("MessageSid"));
   const accountSid = formString(form.get("AccountSid"));
+  const welcomeIntent = isWelcomeGiftIntent(body);
 
-  const normalizedPhone =
-    normalizeUyMobilePhone(from) ?? normalizeUyMobilePhone(waId);
-  const hasValidPhone = normalizedPhone !== null;
+  let phase2Result;
+  try {
+    phase2Result = await processInboundMessagePhase2({
+      from,
+      to,
+      body,
+      profileName,
+      waId,
+      messageSid,
+      accountSid,
+      rawPayload: formDataToRecord(form),
+    });
+  } catch (e) {
+    const errMsg = e instanceof Error ? e.message : "Unknown phase2 error";
+    console.error(
+      JSON.stringify({
+        source: "twilio_whatsapp_inbound",
+        phase: "phase2_error",
+        error: errMsg,
+        from,
+        messageSid,
+      })
+    );
+    const fallback =
+      "Hola, recibimos tu mensaje en Cafecitos ✅ En breve te confirmamos tu regalo de bienvenida.";
+    return new NextResponse(twimlMessage(fallback), {
+      status: 200,
+      headers: { "Content-Type": TWIML_CONTENT_TYPE },
+    });
+  }
 
   console.log(
     JSON.stringify({
@@ -60,12 +94,32 @@ export async function POST(req: Request) {
       waId,
       messageSid,
       accountSid,
-      normalizedPhone,
-      hasValidPhone,
+      normalizedPhone: phase2Result.normalizedPhone,
+      hasValidPhone: phase2Result.hasValidPhone,
+      actionTaken: phase2Result.actionTaken,
+      matchedUserId: phase2Result.matchedUserId,
+      persistOk: phase2Result.persistOk,
+      persistError: phase2Result.persistError,
+      lookupSkipped: phase2Result.lookupSkipped,
     })
   );
 
-  const reply = hasValidPhone ? ACK_VALID_PHONE : ACK_INVALID_PHONE;
+  if (phase2Result.persistError && !phase2Result.persistOk) {
+    console.error(
+      JSON.stringify({
+        source: "twilio_whatsapp_inbound",
+        phase: "persist_failed",
+        error: phase2Result.persistError,
+        messageSid,
+      })
+    );
+  }
+
+  const reply = twimlReplyForAction(
+    phase2Result.actionTaken,
+    phase2Result.matchedUserName,
+    welcomeIntent
+  );
 
   return new NextResponse(twimlMessage(reply), {
     status: 200,

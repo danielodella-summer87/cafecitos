@@ -596,6 +596,11 @@ Responsabilidades:
 - activar regalo si corresponde
 - responder por WhatsApp
 
+**Implementación Fase 2 (trazabilidad + lookup, sin activar regalo):**
+
+- Migración SQL: `supabase/migrations/20260611140000_whatsapp_inbound_phase2.sql` — **ejecutar manualmente en Supabase**
+- Guía operativa: `docs/cafecitos/WHATSAPP-INBOUND-PHASE2.md`
+
 ### Etapa 3 — Consentimiento
 
 Agregar opt-in en registro o perfil.
