@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
+import { supabaseAdminTarget } from "@/lib/supabase/admin";
 import { TWIML_CONTENT_TYPE, twimlMessage } from "@/lib/twilio/twiml";
 import {
   isWelcomeGiftIntent,
@@ -105,12 +106,17 @@ export async function POST(req: Request) {
   );
 
   if (phase2Result.persistError && !phase2Result.persistOk) {
+    const target = supabaseAdminTarget();
     console.error(
       JSON.stringify({
         source: "twilio_whatsapp_inbound",
         phase: "persist_failed",
         error: phase2Result.persistError,
         messageSid,
+        // Diagnóstico seguro: confirma a qué proyecto Supabase apunta el runtime.
+        supabaseProjectRef: target.projectRef,
+        supabaseUrlHost: target.urlHost,
+        hasServiceRoleKey: target.hasServiceRoleKey,
       })
     );
   }

@@ -21,3 +21,31 @@ export function supabaseAdmin(): SupabaseClient {
 
   return _client;
 }
+
+/**
+ * Descriptor seguro del destino Supabase para logs de diagnóstico.
+ * No expone secretos: el host es público (viene de NEXT_PUBLIC_SUPABASE_URL),
+ * y de la service role key solo se reporta presencia (boolean), nunca el valor.
+ */
+export function supabaseAdminTarget(): {
+  urlHost: string | null;
+  projectRef: string | null;
+  hasServiceRoleKey: boolean;
+} {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null;
+  let urlHost: string | null = null;
+  let projectRef: string | null = null;
+  if (url) {
+    try {
+      urlHost = new URL(url).host;
+      projectRef = urlHost.split(".")[0] || null;
+    } catch {
+      urlHost = null;
+    }
+  }
+  return {
+    urlHost,
+    projectRef,
+    hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+  };
+}
