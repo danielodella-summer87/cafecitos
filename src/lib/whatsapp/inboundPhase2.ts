@@ -10,7 +10,12 @@ export type InboundActionTaken =
   | "welcome_gift_pending"
   | "ignored_message"
   | "persist_skipped"
-  | "error";
+  | "error"
+  // Fase 3 (activación automática). Solo se usan cuando WHATSAPP_AUTO_REDEEM_WELCOME_GIFT=true
+  // y el SQL manual (RPC + CHECK ampliado) ya está aplicado en el Supabase canónico.
+  | "welcome_gift_redeemed"
+  | "welcome_gift_already_redeemed"
+  | "welcome_gift_redeem_failed";
 
 export type InboundProcessInput = {
   from: string;
@@ -52,6 +57,9 @@ const TWIML_WELCOME_GIFT_PENDING =
 const TWIML_IGNORED_MESSAGE =
   "Hola, gracias por escribir a Cafecitos. Si querés activar tu regalo de bienvenida, enviá el mensaje desde la app con el botón Solicitar regalo por WhatsApp.";
 
+const TWIML_REDEEM_FAILED =
+  "Recibimos tu solicitud ✅ Tuvimos un problema al activar el regalo; lo revisamos y te confirmamos en breve.";
+
 export function twimlReplyForAction(
   action: InboundActionTaken,
   matchedUserName: string | null,
@@ -76,12 +84,47 @@ export function twimlReplyForAction(
         ? `Hola ${name}, recibimos tu solicitud en Cafecitos ✅ En breve te confirmamos tu regalo de bienvenida.`
         : TWIML_WELCOME_GIFT_PENDING;
     }
+    case "welcome_gift_redeemed": {
+      const name = matchedUserName?.trim();
+      return name
+        ? `¡Listo ${name}! Activamos tu regalo de bienvenida 🎁 Tenés 10 cafecitos en tu cuenta.`
+        : "¡Listo! Activamos tu regalo de bienvenida 🎁 Tenés 10 cafecitos en tu cuenta.";
+    }
+    case "welcome_gift_already_redeemed":
+      return TWIML_ALREADY_REDEEMED;
+    case "welcome_gift_redeem_failed":
+      return TWIML_REDEEM_FAILED;
     case "ignored_message":
       return TWIML_IGNORED_MESSAGE;
     case "error":
     default:
       return welcomeIntent ? TWIML_WELCOME_GIFT_PENDING : TWIML_IGNORED_MESSAGE;
   }
+}
+
+// Fase 3 · Feature flag server-only. Default seguro: false si la variable no existe.
+// Con false, el flujo se mantiene en welcome_gift_pending (Fase 2) y NUNCA llama la RPC.
+function isAutoRedeemEnabled(): boolean {
+  return process.env.WHATSAPP_AUTO_REDEEM_WELCOME_GIFT === "true";
+}
+
+// Fase 3 · Activación "confiada" vía RPC server-only (sin código DDMM).
+// Solo se invoca cuando la flag está ON y el match por phone_normalized fue único.
+// La RPC es idempotente: si el regalo ya estaba activo devuelve status 'already_redeemed'.
+async function activateWelcomeGiftTrusted(
+  profileId: string
+): Promise<
+  "welcome_gift_redeemed" | "welcome_gift_already_redeemed" | "welcome_gift_redeem_failed"
+> {
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase.rpc("activate_welcome_gift_trusted", {
+    p_profile_id: profileId,
+  });
+  if (error) return "welcome_gift_redeem_failed";
+  const status = (data as { status?: string } | null)?.status;
+  if (status === "redeemed") return "welcome_gift_redeemed";
+  if (status === "already_redeemed") return "welcome_gift_already_redeemed";
+  return "welcome_gift_redeem_failed";
 }
 
 export function isWelcomeGiftIntent(body: string): boolean {
@@ -215,7 +258,15 @@ export async function processInboundMessagePhase2(
       matchedUserName = lookup.profiles[0].full_name;
       try {
         const redeemed = await isWelcomeGiftRedeemed(matchedUserId);
-        actionTaken = redeemed ? "already_redeemed" : "welcome_gift_pending";
+        if (redeemed) {
+          actionTaken = "already_redeemed";
+        } else if (isAutoRedeemEnabled()) {
+          // Fase 3 ON: activación automática e idempotente vía RPC server-only.
+          actionTaken = await activateWelcomeGiftTrusted(matchedUserId);
+        } else {
+          // Fase 3 OFF (default): comportamiento de Fase 2, sin activar nada.
+          actionTaken = "welcome_gift_pending";
+        }
       } catch {
         actionTaken = "error";
       }
